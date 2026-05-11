@@ -1,12 +1,15 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc'
 import { Badge, Button, Card } from '@pms/ui'
 import { MiniCalendar } from '@/components/MiniCalendar'
+import { BookingModal } from '@/components/BookingModal'
 
 export default function CalendarPage() {
   const { data, isPending } = trpc.property.list.useQuery()
+  const [modal, setModal] = useState<{ variantId: string; label: string; date: Date } | null>(null)
 
   return (
     <div>
@@ -14,7 +17,7 @@ export default function CalendarPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">ปฏิทิน</h1>
           <p className="mt-1 text-sm text-gray-600">
-            ภาพรวมการจองและสถานะที่พักทุกหลัง — คลิก cell เพื่อเปิด/ดูรายละเอียด
+            ภาพรวมการจองและสถานะที่พักทุกหลัง — คลิก cell เพื่อจอง/ดูรายละเอียด
           </p>
         </div>
       </div>
@@ -37,6 +40,8 @@ export default function CalendarPage() {
           const name = (p.name as { th?: string })?.th ?? p.code
           const defaultVariant = p.variants.find((v) => v.isDefault)
           if (!defaultVariant) return null
+          const defaultVarName =
+            (defaultVariant.name as { th?: string })?.th ?? `${defaultVariant.bedrooms} ห้องนอน`
           return (
             <Card key={p.id} className="overflow-hidden">
               <div className="space-y-3 p-4">
@@ -56,10 +61,9 @@ export default function CalendarPage() {
 
                 <MiniCalendar
                   variantId={defaultVariant.id}
-                  onCellClick={(date) => {
-                    // Phase 3: open booking modal
-                    alert(`Phase 3: เปิด modal จองสำหรับวันที่ ${date.toISOString().slice(0, 10)}`)
-                  }}
+                  onCellClick={(date) =>
+                    setModal({ variantId: defaultVariant.id, label: `${name} — ${defaultVarName}`, date })
+                  }
                 />
 
                 {p.variants.length > 1 && (
@@ -74,7 +78,7 @@ export default function CalendarPage() {
                             <MiniCalendar
                               variantId={v.id}
                               onCellClick={(date) =>
-                                alert(`Phase 3: variant ${vName} — ${date.toISOString().slice(0, 10)}`)
+                                setModal({ variantId: v.id, label: `${name} — ${vName}`, date })
                               }
                             />
                           </div>
@@ -87,6 +91,14 @@ export default function CalendarPage() {
           )
         })}
       </div>
+
+      <BookingModal
+        open={!!modal}
+        onClose={() => setModal(null)}
+        variantId={modal?.variantId ?? null}
+        variantLabel={modal?.label ?? ''}
+        initialDate={modal?.date ?? null}
+      />
     </div>
   )
 }
