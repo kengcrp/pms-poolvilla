@@ -126,8 +126,11 @@ export function MiniCalendar({ variantId, onCellClick, showPrice = true }: Props
             <button
               key={i}
               type="button"
-              onClick={() => onCellClick(cell.date)}
-              className="aspect-square cursor-pointer transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 rounded-md"
+              onClick={() => {
+                console.log('[MiniCalendar] cell clicked:', key)
+                onCellClick(cell.date)
+              }}
+              className="aspect-square cursor-pointer rounded-md transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
               aria-label={key}
             >
               {content}
