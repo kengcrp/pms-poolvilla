@@ -44,6 +44,7 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
     partnerListing: false,
   })
   const [saving, setSaving] = useState(false)
+  const [savedAt, setSavedAt] = useState<Date | null>(null)
 
   useEffect(() => {
     if (!property) return
@@ -62,7 +63,7 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
     return <div className="text-sm text-gray-500">กำลังโหลด...</div>
   }
   if (error || !property) {
-    return <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">ไม่พบที่พัก</div>
+    return <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700 ring-1 ring-inset ring-red-200">ไม่พบที่พัก</div>
   }
 
   const status = reviewStatusLabel[property.reviewStatus] ?? reviewStatusLabel.PENDING!
@@ -80,6 +81,7 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
         contactInfo: form.contactInfo || null,
         partnerListing: form.partnerListing,
       })
+      setSavedAt(new Date())
     } finally {
       setSaving(false)
     }
@@ -87,23 +89,25 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-4 flex items-center justify-between">
-        <Link href="/manage/listings" className="text-sm text-gray-600 hover:text-gray-900">
-          ← กลับ
-        </Link>
-        <div className="flex items-center gap-2">
-          <Badge variant={status.variant} dot>
-            {status.label}
-          </Badge>
-          {!property.isActive && <Badge variant="default">หยุดให้บริการ</Badge>}
-        </div>
-      </div>
+      <Link
+        href="/manage/listings"
+        className="mb-3 inline-flex items-center gap-1.5 text-sm text-gray-600 transition-colors hover:text-gray-900"
+      >
+        <svg className="size-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd" /></svg>
+        กลับ
+      </Link>
 
-      <div className="mb-6 flex items-end justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">รายละเอียดข้อมูลที่พัก</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            รหัส {property.code} · {form.nameTh || '—'}
+          <div className="mb-1.5 flex items-center gap-2">
+            <Badge variant={status.variant} dot>
+              {status.label}
+            </Badge>
+            {!property.isActive && <Badge variant="default">หยุดให้บริการ</Badge>}
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">{form.nameTh || '—'}</h1>
+          <p className="mt-1 flex items-center gap-2 text-sm text-gray-600">
+            <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px]">{property.code}</code>
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -206,17 +210,20 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
               />
             </div>
 
-            <label className="flex items-center gap-2">
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2.5 transition-colors hover:bg-gray-50">
               <input
                 type="checkbox"
                 checked={form.partnerListing}
                 onChange={(e) => setForm({ ...form, partnerListing: e.target.checked })}
-                className="size-4 rounded border-gray-300"
+                className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
               />
               <span className="text-sm text-gray-700">ต้องการลงประกาศกับพาทเนอร์</span>
             </label>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+              <div className="text-xs text-gray-500">
+                {savedAt && `บันทึกล่าสุด ${savedAt.toLocaleTimeString('th-TH')}`}
+              </div>
               <Button onClick={saveSection1} disabled={saving}>
                 {saving ? 'กำลังบันทึก...' : 'บันทึกข้อมูลที่พัก'}
               </Button>
@@ -228,11 +235,11 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
           </div>
         </Section>
 
-        <Section num={2} title="ข้อมูลประเภทที่พัก" description="คุณสมบัติเสริมของที่พัก">
+        <Section num={2} title="ข้อมูลประเภทที่พัก" description="คุณสมบัติเสริม (ลอฟ / มีอาหารเช้า ฯลฯ)">
           <PlaceholderUnderConstruction />
         </Section>
 
-        <Section num={3} title="ข้อมูลรายละเอียดที่พัก" description="multilang Th/En/Zh">
+        <Section num={3} title="ข้อมูลรายละเอียดที่พัก" description="ข้อความหลายภาษา TH/EN/ZH">
           <PlaceholderUnderConstruction />
         </Section>
 
@@ -244,15 +251,15 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
           <PlaceholderUnderConstruction />
         </Section>
 
-        <Section num={6} title="รูปภาพ" description="cover + gallery + 7 photo tours + 3D link">
+        <Section num={6} title="รูปภาพ" description="ปก + แกลเลอรี + 7 photo tours + 3D">
           <PlaceholderUnderConstruction />
         </Section>
 
-        <Section num={7} title="ซิงค์ข้อมูลปฏิทิน" description="iCal URLs จาก Agoda / Booking / Airbnb / Trip / Expedia">
+        <Section num={7} title="ซิงค์ข้อมูลปฏิทิน" description="iCal URLs: Agoda / Booking / Airbnb / Trip / Expedia">
           <PlaceholderUnderConstruction />
         </Section>
 
-        <Section num={8} title="กฎ และนโยบายที่พัก" description="check-in/out times + นโยบายยกเลิก + แขกเพิ่ม + สัตว์เลี้ยง">
+        <Section num={8} title="กฎ และนโยบายที่พัก" description="เวลา check-in/out · นโยบายยกเลิก · แขกเพิ่ม · สัตว์เลี้ยง">
           <PlaceholderUnderConstruction />
         </Section>
       </div>
@@ -262,8 +269,9 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
 
 function PlaceholderUnderConstruction() {
   return (
-    <Card className="border-dashed bg-gray-50 p-6 text-center text-sm text-gray-500">
-      🚧 ส่วนนี้กำลังพัฒนาใน Phase 1.x
-    </Card>
+    <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50 p-8 text-center">
+      <div className="text-2xl">🚧</div>
+      <p className="mt-2 text-sm text-gray-500">ส่วนนี้กำลังพัฒนาใน Phase 1.x</p>
+    </div>
   )
 }

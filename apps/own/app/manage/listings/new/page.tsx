@@ -49,16 +49,20 @@ export default function NewListingPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <div className="mb-4">
-        <Link href="/manage/listings" className="text-sm text-gray-600 hover:text-gray-900">
-          ← กลับ
-        </Link>
+      <Link
+        href="/manage/listings"
+        className="mb-3 inline-flex items-center gap-1.5 text-sm text-gray-600 transition-colors hover:text-gray-900"
+      >
+        <svg className="size-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd" /></svg>
+        กลับ
+      </Link>
+
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">เพิ่มที่พักใหม่</h1>
+        <p className="mt-1 text-sm text-gray-600">กรอกข้อมูลเบื้องต้น — รายละเอียดอื่นแก้ภายหลังได้</p>
       </div>
 
-      <h1 className="text-2xl font-bold text-gray-900">เพิ่มที่พักใหม่</h1>
-      <p className="mt-1 text-sm text-gray-600">กรอกข้อมูลเบื้องต้น — รายละเอียดอื่นแก้ภายหลังได้</p>
-
-      <Card className="mt-6 p-6">
+      <Card className="p-6">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <Label required htmlFor="nameTh">
@@ -74,23 +78,37 @@ export default function NewListingPage() {
             />
           </div>
 
-          <div>
-            <Label htmlFor="type">ประเภทที่พัก</Label>
-            <Select
-              id="type"
-              value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value as typeof form.type })}
-            >
-              <option value="POOL_VILLA">พูลวิลล่า</option>
-              <option value="LOFT">ลอฟ</option>
-              <option value="BNB">B&B</option>
-            </Select>
-          </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
+              <Label htmlFor="type">ประเภทที่พัก</Label>
+              <Select
+                id="type"
+                value={form.type}
+                onChange={(e) => setForm({ ...form, type: e.target.value as typeof form.type })}
+              >
+                <option value="POOL_VILLA">พูลวิลล่า</option>
+                <option value="LOFT">ลอฟ</option>
+                <option value="BNB">B&B</option>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="areaSqwa">พื้นที่ใช้สอย (ตารางวา)</Label>
+              <Input
+                id="areaSqwa"
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.areaSqwa}
+                onChange={(e) => setForm({ ...form, areaSqwa: e.target.value })}
+                placeholder="ไม่ระบุก็ได้"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
               <Label required htmlFor="totalBedrooms">
-                จำนวนห้องนอน
+                ห้องนอน
               </Label>
               <Input
                 id="totalBedrooms"
@@ -104,7 +122,7 @@ export default function NewListingPage() {
             </div>
             <div>
               <Label required htmlFor="totalBathrooms">
-                จำนวนห้องน้ำ
+                ห้องน้ำ
               </Label>
               <Input
                 id="totalBathrooms"
@@ -116,37 +134,24 @@ export default function NewListingPage() {
                 required
               />
             </div>
+            <div>
+              <Label required htmlFor="maxGuests">
+                คนสูงสุด
+              </Label>
+              <Input
+                id="maxGuests"
+                type="number"
+                min={1}
+                max={100}
+                value={form.defaultVariantMaxGuests}
+                onChange={(e) => setForm({ ...form, defaultVariantMaxGuests: Number(e.target.value) })}
+                required
+              />
+            </div>
           </div>
 
-          <div>
-            <Label required htmlFor="maxGuests">
-              จำนวนผู้เข้าพักสูงสุด (เปิดทั้งหลัง)
-            </Label>
-            <Input
-              id="maxGuests"
-              type="number"
-              min={1}
-              max={100}
-              value={form.defaultVariantMaxGuests}
-              onChange={(e) => setForm({ ...form, defaultVariantMaxGuests: Number(e.target.value) })}
-              required
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              ระบบจะสร้าง variant &quot;เปิดทั้งหลัง&quot; ให้อัตโนมัติ — ต่อมาสามารถเพิ่มแบบแบ่งห้องในหน้าแก้ไข
-            </p>
-          </div>
-
-          <div>
-            <Label htmlFor="areaSqwa">พื้นที่ใช้สอย (ตารางวา)</Label>
-            <Input
-              id="areaSqwa"
-              type="number"
-              min={0}
-              step="0.01"
-              value={form.areaSqwa}
-              onChange={(e) => setForm({ ...form, areaSqwa: e.target.value })}
-              placeholder="ไม่ระบุก็ได้"
-            />
+          <div className="rounded-lg bg-brand-50/50 px-3 py-2.5 text-xs text-brand-800 ring-1 ring-inset ring-brand-200/60">
+            💡 ระบบจะสร้าง variant &quot;เปิดทั้งหลัง&quot; ให้อัตโนมัติ — เพิ่มแบบแบ่งห้องในหน้าแก้ไขภายหลังได้
           </div>
 
           <div>
@@ -159,9 +164,13 @@ export default function NewListingPage() {
             />
           </div>
 
-          {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+          {error && (
+            <div className="rounded-lg bg-red-50 px-3.5 py-2.5 text-sm text-red-700 ring-1 ring-inset ring-red-200">
+              {error}
+            </div>
+          )}
 
-          <div className="flex items-center justify-end gap-3 pt-2">
+          <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-5">
             <Link href="/manage/listings">
               <Button variant="secondary" type="button">
                 ยกเลิก

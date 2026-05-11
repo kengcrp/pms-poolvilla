@@ -3,7 +3,7 @@
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn } from 'next-auth/react'
-import { Button } from '@pms/ui'
+import { Button, Input, Label } from '@pms/ui'
 
 function LoginForm() {
   const router = useRouter()
@@ -28,33 +28,51 @@ function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
       <div>
-        <label className="mb-1 block text-sm font-medium text-gray-700">อีเมล</label>
-        <input
+        <Label required htmlFor="email">
+          อีเมล
+        </Label>
+        <Input
+          id="email"
           type="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          autoComplete="email"
         />
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-gray-700">รหัสผ่าน</label>
-        <input
+        <Label required htmlFor="password">
+          รหัสผ่าน
+        </Label>
+        <Input
+          id="password"
           type="password"
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          autoComplete="current-password"
         />
       </div>
 
-      {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+      {error && (
+        <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3.5 py-2.5 text-sm text-red-700 ring-1 ring-inset ring-red-200">
+          <svg className="size-4 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 7zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+          <span>{error}</span>
+        </div>
+      )}
 
       <Button type="submit" size="lg" disabled={loading} className="w-full">
-        {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
+        {loading ? (
+          <>
+            <svg className="size-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+            กำลังเข้าสู่ระบบ...
+          </>
+        ) : (
+          'เข้าสู่ระบบ'
+        )}
       </Button>
     </form>
   )
@@ -62,18 +80,29 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-white px-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg">
-        <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-gray-900">PMS Pool Villa</h1>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-brand-50 via-white to-brand-50/40 px-4">
+      <div className="pointer-events-none absolute -top-24 -left-24 size-96 rounded-full bg-brand-200/30 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -right-24 size-96 rounded-full bg-brand-300/20 blur-3xl" />
+
+      <div className="relative w-full max-w-md">
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-brand-600 text-2xl text-white shadow-lg shadow-brand-600/30">
+            🏖️
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">PMS Pool Villa</h1>
           <p className="mt-1 text-sm text-gray-600">เข้าสู่ระบบเจ้าของที่พัก</p>
         </div>
 
-        <Suspense fallback={<div className="text-center text-sm text-gray-500">กำลังโหลด...</div>}>
-          <LoginForm />
-        </Suspense>
+        <div className="rounded-2xl bg-white p-8 shadow-xl shadow-gray-900/5 ring-1 ring-gray-900/5">
+          <Suspense fallback={<div className="py-8 text-center text-sm text-gray-500">กำลังโหลด...</div>}>
+            <LoginForm />
+          </Suspense>
+        </div>
 
-        <p className="mt-6 text-center text-xs text-gray-500">Demo: owner@pms.local / owner1234</p>
+        <p className="mt-6 text-center text-xs text-gray-500">
+          Demo: <code className="rounded bg-white px-1.5 py-0.5 ring-1 ring-gray-200">owner@pms.local</code> /{' '}
+          <code className="rounded bg-white px-1.5 py-0.5 ring-1 ring-gray-200">owner1234</code>
+        </p>
       </div>
     </div>
   )

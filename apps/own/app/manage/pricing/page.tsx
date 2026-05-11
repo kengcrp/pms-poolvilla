@@ -6,56 +6,55 @@ import { trpc } from '@/lib/trpc'
 import { Badge, Button, Card } from '@pms/ui'
 import { MiniCalendar } from '@/components/MiniCalendar'
 import { WeeklyPricingModal } from '@/components/WeeklyPricingModal'
+import { PageHeader } from '@/components/PageHeader'
+import { StatusLegend } from '@/components/StatusLegend'
 
 export default function PricingPage() {
   const { data, isPending } = trpc.property.list.useQuery()
   const [editing, setEditing] = useState<{ variantId: string; name: string } | null>(null)
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">ปรับราคา</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          ตั้งค่าราคาเริ่มต้นรายวันของสัปดาห์ — สามารถ override รายวันจากปฏิทินได้
-        </p>
-      </div>
+    <div className="mx-auto max-w-7xl">
+      <PageHeader
+        title="ปรับราคา"
+        description="ตั้งค่าราคาเริ่มต้นรายวันของสัปดาห์ — สามารถ override รายวันได้จากปฏิทิน"
+      >
+        <StatusLegend />
+      </PageHeader>
 
-      <StatusLegend />
-
-      {isPending && <div className="mt-6 text-sm text-gray-500">กำลังโหลด...</div>}
+      {isPending && <div className="text-sm text-gray-500">กำลังโหลด...</div>}
 
       {!isPending && data && data.length === 0 && (
-        <Card className="mt-6 p-10 text-center">
+        <Card className="flex flex-col items-center p-12 text-center">
+          <div className="mb-3 flex size-14 items-center justify-center rounded-2xl bg-gray-100 text-3xl">💰</div>
           <p className="text-sm text-gray-600">ยังไม่มีที่พัก — สร้างที่พักก่อนเพื่อกำหนดราคา</p>
-          <Link href="/manage/listings/new" className="mt-3 inline-block">
-            <Button size="md">+ เพิ่มที่พัก</Button>
+          <Link href="/manage/listings/new" className="mt-4">
+            <Button>+ เพิ่มที่พัก</Button>
           </Link>
         </Card>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
         {data?.map((p) => {
           const name = (p.name as { th?: string })?.th ?? p.code
           const defaultVariant = p.variants.find((v) => v.isDefault)
           if (!defaultVariant) return null
           const varName = (defaultVariant.name as { th?: string })?.th ?? `${defaultVariant.bedrooms} ห้องนอน`
           return (
-            <Card key={p.id} className="overflow-hidden">
-              <div className="space-y-3 p-4">
+            <Card key={p.id} hover className="overflow-hidden">
+              <div className="space-y-3 p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{name}</h3>
-                    <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
-                      <span>{p.code}</span>
+                  <div className="min-w-0">
+                    <h3 className="truncate font-semibold text-gray-900">{name}</h3>
+                    <div className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
+                      <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10.5px]">{p.code}</code>
                       <span>·</span>
                       <span>🛏 {defaultVariant.bedrooms}</span>
                       <span>·</span>
                       <span>👥 {defaultVariant.maxGuests}</span>
                     </div>
                   </div>
-                  {p.variants.length > 1 && (
-                    <Badge variant="info">แบ่งห้อง {p.variants.length}</Badge>
-                  )}
+                  {p.variants.length > 1 && <Badge variant="brand">แบ่ง {p.variants.length}</Badge>}
                 </div>
 
                 <Button
@@ -64,16 +63,17 @@ export default function PricingPage() {
                   className="w-full"
                   onClick={() => setEditing({ variantId: defaultVariant.id, name: `${name} — ${varName}` })}
                 >
-                  ⚙ ตั้งค่าเรทราคา (สัปดาห์)
+                  <svg className="size-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /></svg>
+                  ตั้งค่าเรทราคา (สัปดาห์)
                 </Button>
 
-                <div className="pt-2">
-                  <MiniCalendar variantId={defaultVariant.id} />
-                </div>
+                <MiniCalendar variantId={defaultVariant.id} />
 
                 {p.variants.length > 1 && (
-                  <div className="space-y-2 border-t border-gray-100 pt-3">
-                    <div className="text-xs font-semibold text-gray-500">แบบแบ่งห้อง:</div>
+                  <div className="space-y-1.5 border-t border-gray-100 pt-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                      แบบแบ่งห้อง
+                    </div>
                     {p.variants
                       .filter((v) => !v.isDefault)
                       .map((v) => {
@@ -86,7 +86,10 @@ export default function PricingPage() {
                             className="w-full justify-start"
                             onClick={() => setEditing({ variantId: v.id, name: `${name} — ${vName}` })}
                           >
-                            ⚙ ตั้งค่า: {vName}
+                            ⚙ {vName}
+                            <span className="ml-auto text-[10.5px] text-gray-400">
+                              👥 {v.maxGuests}
+                            </span>
                           </Button>
                         )
                       })}
@@ -105,26 +108,5 @@ export default function PricingPage() {
         variantName={editing?.name ?? ''}
       />
     </div>
-  )
-}
-
-function StatusLegend() {
-  return (
-    <div className="flex flex-wrap items-center gap-3 text-xs">
-      <LegendDot color="bg-red-100 text-red-700" label="จองแล้ว" />
-      <LegendDot color="bg-amber-100 text-amber-700" label="รอชำระ" />
-      <LegendDot color="bg-blue-100 text-blue-700" label="วันสำคัญ" />
-      <LegendDot color="bg-emerald-100 text-emerald-700" label="ลดราคา" />
-      <LegendDot color="bg-gray-200 text-gray-700" label="ปิดซ่อม" />
-    </div>
-  )
-}
-
-function LegendDot({ color, label }: { color: string; label: string }) {
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-medium ${color}`}>
-      <span className="size-1.5 rounded-full bg-current opacity-70" />
-      {label}
-    </span>
   )
 }

@@ -15,18 +15,18 @@ interface Props {
   initialDate: Date | null
 }
 
-const tabs: { key: Tab; label: string }[] = [
-  { key: 'quick', label: 'จองด่วน' },
-  { key: 'pending', label: 'รอยอด' },
-  { key: 'invoice', label: 'ทำใบจอง' },
-  { key: 'block', label: 'ปิดซ่อม' },
+const tabs: { key: Tab; label: string; icon: string }[] = [
+  { key: 'quick', label: 'จองด่วน', icon: '⚡' },
+  { key: 'pending', label: 'รอยอด', icon: '⏳' },
+  { key: 'invoice', label: 'ทำใบจอง', icon: '🧾' },
+  { key: 'block', label: 'ปิดซ่อม', icon: '🛠' },
 ]
 
 const statusBadgeMap = {
-  BOOKED: { label: 'booked', variant: 'danger' as const },
-  PENDING_PAYMENT: { label: 'pending_payment', variant: 'warning' as const },
-  UNDER_MAINTENANCE: { label: 'under_maintenance', variant: 'default' as const },
-  OPEN: { label: 'open', variant: 'success' as const },
+  BOOKED: { label: 'จองแล้ว', variant: 'danger' as const },
+  PENDING_PAYMENT: { label: 'รอชำระ', variant: 'warning' as const },
+  UNDER_MAINTENANCE: { label: 'ปิดซ่อม', variant: 'default' as const },
+  OPEN: { label: 'ว่าง', variant: 'success' as const },
 }
 
 export function BookingModal({ open, onClose, variantId, variantLabel, initialDate }: Props) {
@@ -35,9 +35,7 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
   const [error, setError] = useState<string | null>(null)
 
   const dateStr = initialDate ? ymdLocal(initialDate) : ''
-  const nextDayStr = initialDate
-    ? ymdLocal(new Date(initialDate.getTime() + 86400000))
-    : ''
+  const nextDayStr = initialDate ? ymdLocal(new Date(initialDate.getTime() + 86400000)) : ''
 
   const [form, setForm] = useState({
     checkin: '',
@@ -80,7 +78,6 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
     })
   }, [open, dateStr, nextDayStr])
 
-  // What's at this date already?
   const { data: cell } = trpc.booking.atDate.useQuery(
     { variantId: variantId ?? '', date: dateStr },
     { enabled: !!variantId && !!dateStr && open },
@@ -116,12 +113,7 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
       internalNote: form.internalNote || undefined,
     }
     if (tab === 'block') {
-      return blockDates.mutate({
-        variantId,
-        checkin: form.checkin,
-        checkout: form.checkout,
-        note: form.blockNote || undefined,
-      })
+      return blockDates.mutate({ variantId, checkin: form.checkin, checkout: form.checkout, note: form.blockNote || undefined })
     }
     if (!form.customerName) return setError('กรุณาระบุชื่อลูกค้า')
     if (tab === 'quick') {
@@ -151,19 +143,21 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
   const existingBadge = cell ? statusBadgeMap[cell.status] : null
 
   return (
-    <Modal open={open} onClose={onClose} title="ทำรายการจอง" description={variantLabel} size="lg">
+    <Modal open={open} onClose={onClose} title="ทำรายการจอง" description={variantLabel} size="xl">
       <ModalBody>
         {isExisting && cell.booking && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <div className="flex items-center gap-2">
-              <Badge variant={existingBadge!.variant}>{existingBadge!.label}</Badge>
-              <span className="text-sm font-medium text-gray-900">{cell.booking.customerName}</span>
-            </div>
-            <div className="mt-1 text-xs text-gray-600">
-              {ymdLocal(cell.booking.checkin)} → {ymdLocal(cell.booking.checkout)} · {cell.booking.guestCount} ท่าน · ฿{Number(cell.booking.total).toLocaleString()}
-            </div>
-            {cell.booking.publicNote && <div className="mt-1 text-xs text-gray-500">{cell.booking.publicNote}</div>}
-            <div className="mt-3 flex gap-2">
+          <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50/50 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={existingBadge!.variant} dot>{existingBadge!.label}</Badge>
+                  <span className="font-semibold text-gray-900">{cell.booking.customerName}</span>
+                </div>
+                <div className="mt-1.5 text-xs text-gray-600">
+                  {ymdLocal(cell.booking.checkin)} → {ymdLocal(cell.booking.checkout)} · {cell.booking.guestCount} ท่าน · ฿{Number(cell.booking.total).toLocaleString()}
+                </div>
+                {cell.booking.publicNote && <div className="mt-1 text-xs text-gray-500">{cell.booking.publicNote}</div>}
+              </div>
               <Button
                 size="sm"
                 variant="danger"
@@ -178,20 +172,16 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
         )}
 
         {isExisting && !cell.booking && cell.status === 'UNDER_MAINTENANCE' && (
-          <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-            <Badge variant="default">under_maintenance</Badge>
-            {cell.note && <div className="mt-1 text-xs text-gray-600">{cell.note}</div>}
-            <div className="mt-3">
+          <div className="mb-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <Badge variant="default" dot>ปิดซ่อม</Badge>
+                {cell.note && <div className="mt-1.5 text-xs text-gray-600">{cell.note}</div>}
+              </div>
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() =>
-                  unblock.mutate({
-                    variantId,
-                    checkin: form.checkin,
-                    checkout: form.checkout,
-                  })
-                }
+                onClick={() => unblock.mutate({ variantId, checkin: form.checkin, checkout: form.checkout })}
               >
                 ปลดล็อค
               </Button>
@@ -199,40 +189,35 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
           </div>
         )}
 
-        <div className="mb-4 flex gap-1 border-b border-gray-200">
+        {/* Tabs */}
+        <div className="mb-5 flex gap-1 rounded-xl bg-gray-100 p-1">
           {tabs.map((t) => (
             <button
               key={t.key}
               type="button"
               onClick={() => setTab(t.key)}
               className={cn(
-                'border-b-2 px-4 py-2 text-sm font-medium transition-colors',
+                'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all',
                 tab === t.key
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700',
+                  ? 'bg-white text-brand-700 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900',
               )}
             >
-              {t.label}
+              <span>{t.icon}</span>
+              <span>{t.label}</span>
             </button>
           ))}
         </div>
 
+        {/* Date row */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label required>วันที่เช็คอิน</Label>
-            <Input
-              type="date"
-              value={form.checkin}
-              onChange={(e) => setForm({ ...form, checkin: e.target.value })}
-            />
+            <Input type="date" value={form.checkin} onChange={(e) => setForm({ ...form, checkin: e.target.value })} />
           </div>
           <div>
             <Label required>วันที่เช็คเอาท์</Label>
-            <Input
-              type="date"
-              value={form.checkout}
-              onChange={(e) => setForm({ ...form, checkout: e.target.value })}
-            />
+            <Input type="date" value={form.checkout} onChange={(e) => setForm({ ...form, checkout: e.target.value })} />
           </div>
         </div>
 
@@ -241,27 +226,21 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
             <div className="mt-4 grid grid-cols-2 gap-4">
               <div>
                 <Label required>ชื่อลูกค้า</Label>
-                <Input
-                  value={form.customerName}
-                  onChange={(e) => setForm({ ...form, customerName: e.target.value })}
-                />
+                <Input value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} />
               </div>
               <div>
                 <Label>เบอร์โทรศัพท์</Label>
-                <Input
-                  value={form.customerPhone}
-                  onChange={(e) => setForm({ ...form, customerPhone: e.target.value })}
-                />
+                <Input value={form.customerPhone} onChange={(e) => setForm({ ...form, customerPhone: e.target.value })} />
               </div>
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-4">
               <div>
-                <Label>ชื่อผู้จอง (ถ้าต่างจากลูกค้า)</Label>
+                <Label>ชื่อผู้จอง</Label>
                 <Input
                   value={form.bookerName}
                   onChange={(e) => setForm({ ...form, bookerName: e.target.value })}
-                  placeholder={form.customerName}
+                  placeholder={form.customerName || 'ถ้าต่างจากลูกค้า'}
                 />
               </div>
               <div>
@@ -317,29 +296,34 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
                       value={form.paymentDueAt}
                       onChange={(e) => setForm({ ...form, paymentDueAt: e.target.value })}
                     />
-                    <p className="mt-1 text-xs text-gray-500">หากเลยกำหนด ระบบจะยกเลิกการจองอัตโนมัติ</p>
                   </div>
                 )}
               </div>
             )}
 
+            {tab === 'pending' && (
+              <p className="mt-1 text-xs text-gray-500">
+                💡 หากเลยกำหนดและยังไม่ชำระ ระบบจะยกเลิกอัตโนมัติ
+              </p>
+            )}
+
             {tab === 'invoice' && (
-              <div className="mt-4 flex items-center gap-6">
-                <label className="flex items-center gap-2">
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 transition-colors hover:bg-gray-50">
                   <input
                     type="checkbox"
                     checked={form.vat}
                     onChange={(e) => setForm({ ...form, vat: e.target.checked })}
-                    className="size-4 rounded border-gray-300"
+                    className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
                   />
                   <span className="text-sm text-gray-700">VAT 7%</span>
                 </label>
-                <label className="flex items-center gap-2">
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 transition-colors hover:bg-gray-50">
                   <input
                     type="checkbox"
                     checked={form.showLogo}
                     onChange={(e) => setForm({ ...form, showLogo: e.target.checked })}
-                    className="size-4 rounded border-gray-300"
+                    className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
                   />
                   <span className="text-sm text-gray-700">แสดงโลโก้ในใบจอง</span>
                 </label>
@@ -349,19 +333,11 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
             <div className="mt-4 grid grid-cols-2 gap-4">
               <div>
                 <Label>หมายเหตุ (แสดงในใบจอง)</Label>
-                <Textarea
-                  rows={3}
-                  value={form.publicNote}
-                  onChange={(e) => setForm({ ...form, publicNote: e.target.value })}
-                />
+                <Textarea rows={3} value={form.publicNote} onChange={(e) => setForm({ ...form, publicNote: e.target.value })} />
               </div>
               <div>
                 <Label>โน้ตเพิ่มเติม (เฉพาะหลังบ้าน)</Label>
-                <Textarea
-                  rows={3}
-                  value={form.internalNote}
-                  onChange={(e) => setForm({ ...form, internalNote: e.target.value })}
-                />
+                <Textarea rows={3} value={form.internalNote} onChange={(e) => setForm({ ...form, internalNote: e.target.value })} />
               </div>
             </div>
           </>
@@ -379,14 +355,18 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
           </div>
         )}
 
-        {error && <div className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+        {error && (
+          <div className="mt-4 rounded-lg bg-red-50 px-3.5 py-2.5 text-sm text-red-700 ring-1 ring-inset ring-red-200">
+            {error}
+          </div>
+        )}
       </ModalBody>
       <ModalFooter>
         <Button variant="secondary" onClick={onClose}>
           ปิด
         </Button>
-        <Button onClick={submit}>
-          {tab === 'block' ? 'ปิดซ่อม' : tab === 'invoice' ? 'ออกใบจอง' : 'ยืนยัน'}
+        <Button onClick={submit} variant={tab === 'block' ? 'secondary' : tab === 'invoice' ? 'primary' : 'primary'}>
+          {tab === 'block' ? 'ปิดซ่อม' : tab === 'invoice' ? 'ออกใบจอง' : tab === 'pending' ? 'บันทึก รอยอด' : 'จองด่วน'}
         </Button>
       </ModalFooter>
     </Modal>

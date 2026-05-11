@@ -1,26 +1,7 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { auth, signOut } from '@/auth'
 import { TRPCProvider } from '@/lib/trpc'
-
-const menu = [
-  { group: 'จัดการข้อมูล', items: [
-    { href: '/manage/calendar', label: 'ปฏิทิน', icon: '📅' },
-    { href: '/manage/pricing', label: 'ปรับราคา', icon: '💰' },
-    { href: '/manage/listings', label: 'ลิสติ้งที่พัก', icon: '🏠' },
-    { href: '/manage/postpone', label: 'เลื่อนวันเข้าพัก', icon: '🔁' },
-    { href: '/manage/housekeeper', label: 'House Keeper', icon: '🧹' },
-    { href: '/manage/coupons', label: 'คูปอง', icon: '🎟️' },
-    { href: '/manage/accounting', label: 'ด้านบัญชี', icon: '📊' },
-  ]},
-  { group: 'รายงาน', items: [
-    { href: '/manage/dashboard', label: 'แดชบอร์ด', icon: '📈' },
-    { href: '/manage/transactions', label: 'ประวัติการทำรายการ', icon: '📜' },
-  ]},
-  { group: 'อื่นๆ', items: [
-    { href: '/manage/payout-channels', label: 'ช่องทางรับเงิน', icon: '🏦' },
-  ]},
-]
+import { Sidebar } from '@/components/Sidebar'
 
 export default async function ManageLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -31,49 +12,36 @@ export default async function ManageLayout({ children }: { children: React.React
   return (
     <TRPCProvider>
       <div className="flex min-h-screen bg-gray-50">
-        <aside className="w-64 shrink-0 border-r border-gray-200 bg-white">
-          <div className="border-b border-gray-200 px-6 py-5">
-            <Link href="/manage/dashboard" className="text-lg font-bold text-blue-600">
-              PMS Pool Villa
-            </Link>
-          </div>
-          <nav className="px-3 py-4">
-            {menu.map((group) => (
-              <div key={group.group} className="mb-4">
-                <div className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
-                  {group.group}
-                </div>
-                <ul className="space-y-0.5">
-                  {group.items.map((item) => (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      >
-                        <span className="text-base">{item.icon}</span>
-                        <span>{item.label}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </nav>
-        </aside>
+        <Sidebar />
 
-        <div className="flex-1">
-          <header className="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-6">
+        <div className="flex flex-1 flex-col">
+          <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-gray-200 bg-white/80 px-6 backdrop-blur-md">
             <div />
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600">สวัสดี, {user.name ?? user.email}</span>
-              <form action={async () => { 'use server'; await signOut({ redirectTo: '/login' }) }}>
-                <button className="text-sm text-gray-600 hover:text-gray-900" type="submit">
-                  ออกจากระบบ
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-sm ring-1 ring-inset ring-gray-200">
+                <div className="flex size-6 items-center justify-center rounded-full bg-brand-600 text-xs font-medium text-white">
+                  {user.name?.[0]?.toUpperCase() ?? 'O'}
+                </div>
+                <span className="text-gray-700">{user.name ?? user.email}</span>
+              </div>
+              <form
+                action={async () => {
+                  'use server'
+                  await signOut({ redirectTo: '/login' })
+                }}
+              >
+                <button
+                  type="submit"
+                  className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                  title="ออกจากระบบ"
+                >
+                  <svg className="size-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 4.25A2.25 2.25 0 015.25 2h5.5A2.25 2.25 0 0113 4.25v2a.75.75 0 01-1.5 0v-2a.75.75 0 00-.75-.75h-5.5a.75.75 0 00-.75.75v11.5c0 .414.336.75.75.75h5.5a.75.75 0 00.75-.75v-2a.75.75 0 011.5 0v2A2.25 2.25 0 0110.75 18h-5.5A2.25 2.25 0 013 15.75V4.25z" clipRule="evenodd" /><path fillRule="evenodd" d="M19 10a.75.75 0 00-.75-.75H8.704l1.048-.943a.75.75 0 10-1.004-1.114l-2.5 2.25a.75.75 0 000 1.114l2.5 2.25a.75.75 0 101.004-1.114l-1.048-.943h9.546A.75.75 0 0019 10z" clipRule="evenodd" /></svg>
                 </button>
               </form>
             </div>
           </header>
-          <main className="p-6">{children}</main>
+
+          <main className="flex-1 p-6 lg:p-8">{children}</main>
         </div>
       </div>
     </TRPCProvider>
