@@ -4,21 +4,23 @@ import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '../cn'
 
+type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl'
+
 interface ModalProps {
   open: boolean
   onClose: () => void
   children: React.ReactNode
   title?: string
   description?: string
-  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl'
+  size?: ModalSize
 }
 
-const sizeClass = {
-  sm: 'max-w-md',
-  md: 'max-w-lg',
-  lg: 'max-w-2xl',
-  xl: 'max-w-3xl',
-  '2xl': 'max-w-5xl',
+const sizePx: Record<ModalSize, number> = {
+  sm: 448,
+  md: 512,
+  lg: 672,
+  xl: 768,
+  '2xl': 1024,
 }
 
 export function Modal({ open, onClose, children, title, description, size = 'md' }: ModalProps) {
@@ -57,10 +59,8 @@ export function Modal({ open, onClose, children, title, description, size = 'md'
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={cn(
-          'relative my-auto w-full overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-900/5',
-          sizeClass[size],
-        )}
+        style={{ maxWidth: `${sizePx[size]}px`, width: '100%', marginTop: 'auto', marginBottom: 'auto' }}
+        className="relative overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-900/5"
       >
         {(title || description) && (
           <div className="sticky top-0 z-10 border-b border-gray-100 bg-white px-6 py-4">
