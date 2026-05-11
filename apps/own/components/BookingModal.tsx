@@ -142,7 +142,7 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
   const existingBadge = cell ? statusBadgeMap[cell.status] : null
 
   return (
-    <Modal open={open} onClose={onClose} title="ทำรายการจอง" description={variantLabel} size="xl">
+    <Modal open={open} onClose={onClose} title="ทำรายการจอง" description={variantLabel} size="lg">
       <ModalBody>
         {isExisting && cell.booking && (
           <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50/50 p-4">
