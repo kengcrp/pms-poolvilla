@@ -95,9 +95,8 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
   const cancel = trpc.booking.cancel.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(e.message) })
   const unblock = trpc.booking.unblockDates.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(e.message) })
 
-  if (!variantId) return null
-
   const submit = () => {
+    if (!variantId) return
     setError(null)
     if (!form.checkin || !form.checkout) return setError('กรุณาเลือกวันที่')
     const base = {
@@ -113,7 +112,7 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
       internalNote: form.internalNote || undefined,
     }
     if (tab === 'block') {
-      return blockDates.mutate({ variantId, checkin: form.checkin, checkout: form.checkout, note: form.blockNote || undefined })
+      return blockDates.mutate({ variantId: variantId!, checkin: form.checkin, checkout: form.checkout, note: form.blockNote || undefined })
     }
     if (!form.customerName) return setError('กรุณาระบุชื่อลูกค้า')
     if (tab === 'quick') {
@@ -181,7 +180,7 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => unblock.mutate({ variantId, checkin: form.checkin, checkout: form.checkout })}
+                onClick={() => variantId && unblock.mutate({ variantId, checkin: form.checkin, checkout: form.checkout })}
               >
                 ปลดล็อค
               </Button>
