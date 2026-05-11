@@ -1,7 +1,8 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
+  // Transpile workspace packages — required for hot-reload of @pms/* TS sources
+  transpilePackages: ['@pms/ui', '@pms/api', '@pms/auth', '@pms/db'],
+}
 
-export default nextConfig;
+export default nextConfig
