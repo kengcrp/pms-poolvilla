@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "noEmit": true,
+    "jsx": "preserve",
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/*": ["./*"],
+      "@pms/db": ["../../packages/db/src/index.ts"],
+      "@pms/db/*": ["../../packages/db/src/*"],
+      "@pms/api": ["../../packages/api/src/index.ts"],
+      "@pms/api/*": ["../../packages/api/src/*"],
+      "@pms/auth": ["../../packages/auth/src/index.ts"],
+      "@pms/ui": ["../../packages/ui/src/index.ts"],
+      "@pms/ui/*": ["../../packages/ui/src/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": ["node_modules", ".next"]
+}
