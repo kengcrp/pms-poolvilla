@@ -1,2 +1,8 @@
 export { cn } from './cn'
 export { Button, type ButtonProps } from './components/Button'
+export { Input } from './components/Input'
+export { Textarea } from './components/Textarea'
+export { Label } from './components/Label'
+export { Select } from './components/Select'
+export { Card, CardHeader, CardTitle, CardContent, CardFooter } from './components/Card'
+export { Badge } from './components/Badge'
