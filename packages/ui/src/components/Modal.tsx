@@ -22,12 +22,6 @@ const sizeClass = {
 }
 
 export function Modal({ open, onClose, children, title, description, size = 'md' }: ModalProps) {
-  const [mounted, setMounted] = React.useState(false)
-
-  React.useEffect(() => {
-    setMounted(true)
-  }, [])
-
   React.useEffect(() => {
     if (!open) return
     const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -40,13 +34,10 @@ export function Modal({ open, onClose, children, title, description, size = 'md'
     }
   }, [open, onClose])
 
-  if (!open || !mounted) return null
+  if (!open || typeof document === 'undefined') return null
 
   const content = (
-    <div
-      className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto p-4 sm:items-center"
-      style={{ animation: 'fade-in 150ms ease-out' }}
-    >
+    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
       <button
         type="button"
         aria-label="ปิด"
@@ -60,7 +51,6 @@ export function Modal({ open, onClose, children, title, description, size = 'md'
           'relative my-auto w-full overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-900/5',
           sizeClass[size],
         )}
-        style={{ animation: 'scale-in 150ms ease-out' }}
         onClick={(e) => e.stopPropagation()}
       >
         {(title || description) && (
