@@ -148,4 +148,89 @@ export const propertyExtrasRouter = router({
   amenityMaster: ownerProcedure.query(() =>
     prisma.amenityMaster.findMany({ orderBy: [{ category: 'asc' }, { nameTh: 'asc' }] }),
   ),
+
+  // ─── Images ───────────────────────────────────────────────
+  addImage: ownerProcedure
+    .input(
+      z.object({
+        propertyId: z.string(),
+        url: z.string().min(1),
+        type: z.enum(['cover', 'gallery', 'tour']),
+        category: z
+          .enum(['pool', 'bedroom', 'bathroom', 'living', 'kitchen', 'rooftop', 'outdoor'])
+          .nullable()
+          .optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertOwn(input.propertyId, ctx.ownerId)
+      // If adding a cover, demote any existing cover to gallery
+      if (input.type === 'cover') {
+        await prisma.propertyImage.updateMany({
+          where: { propertyId: input.propertyId, type: 'cover' },
+          data: { type: 'gallery' },
+        })
+      }
+      const count = await prisma.propertyImage.count({
+        where: { propertyId: input.propertyId, type: input.type, category: input.category ?? null },
+      })
+      return prisma.propertyImage.create({
+        data: {
+          propertyId: input.propertyId,
+          url: input.url,
+          type: input.type,
+          category: input.category ?? null,
+          sortOrder: count,
+        },
+      })
+    }),
+
+  deleteImage: ownerProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const img = await prisma.propertyImage.findFirst({
+        where: { id: input.id, property: { ownerId: ctx.ownerId, deletedAt: null } },
+      })
+      if (!img) throw new TRPCError({ code: 'NOT_FOUND' })
+      return prisma.propertyImage.delete({ where: { id: input.id } })
+    }),
+
+  setCover: ownerProcedure
+    .input(z.object({ imageId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const img = await prisma.propertyImage.findFirst({
+        where: { id: input.imageId, property: { ownerId: ctx.ownerId, deletedAt: null } },
+      })
+      if (!img) throw new TRPCError({ code: 'NOT_FOUND' })
+      await prisma.$transaction([
+        prisma.propertyImage.updateMany({
+          where: { propertyId: img.propertyId, type: 'cover' },
+          data: { type: 'gallery' },
+        }),
+        prisma.propertyImage.update({
+          where: { id: input.imageId },
+          data: { type: 'cover', category: null },
+        }),
+      ])
+      return { ok: true }
+    }),
+
+  setTour360Url: ownerProcedure
+    .input(z.object({ propertyId: z.string(), url: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertOwn(input.propertyId, ctx.ownerId)
+      // 1 single 3D record per property — upsert by deleting existing first
+      await prisma.propertyImage.deleteMany({
+        where: { propertyId: input.propertyId, type: 'tour_360' },
+      })
+      if (!input.url) return { ok: true }
+      return prisma.propertyImage.create({
+        data: {
+          propertyId: input.propertyId,
+          url: input.url,
+          type: 'tour_360',
+          sortOrder: 0,
+        },
+      })
+    }),
 })

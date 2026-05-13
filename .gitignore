@@ -36,6 +36,7 @@ prisma/migrations/dev/
 
 # uploads (local dev)
 uploads/
+apps/*/public/uploads/
 
 # coverage
 coverage/

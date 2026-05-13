@@ -11,6 +11,7 @@ import { LocationSection } from '@/components/sections/LocationSection'
 import { PolicySection } from '@/components/sections/PolicySection'
 import { AmenitySection } from '@/components/sections/AmenitySection'
 import { IcalSyncSection } from '@/components/sections/IcalSyncSection'
+import { ImagesSection } from '@/components/sections/ImagesSection'
 
 const reviewStatusLabel: Record<string, { label: string; variant: 'pending' | 'success' | 'danger' | 'default' }> = {
   PENDING: { label: 'รอการตรวจสอบ', variant: 'pending' },
@@ -255,8 +256,8 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
           <AmenitySection propertyId={id} />
         </Section>
 
-        <Section num={6} title="รูปภาพ" description="ปก + แกลเลอรี + 7 photo tours + 3D">
-          <PlaceholderUnderConstruction />
+        <Section num={6} title="รูปภาพ" description="ปก + 7 photo tours + 3D / 360">
+          <ImagesSection propertyId={id} />
         </Section>
 
         <Section num={7} title="ซิงค์ข้อมูลปฏิทิน" description="iCal URLs: Agoda / Booking / Airbnb / Trip / Expedia">
