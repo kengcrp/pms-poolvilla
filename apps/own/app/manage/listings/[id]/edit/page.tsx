@@ -7,6 +7,10 @@ import { trpc } from '@/lib/trpc'
 import { Badge, Button, Card, Input, Label, Select } from '@pms/ui'
 import { Section } from '@/components/Section'
 import { VariantManager } from '@/components/VariantManager'
+import { LocationSection } from '@/components/sections/LocationSection'
+import { PolicySection } from '@/components/sections/PolicySection'
+import { AmenitySection } from '@/components/sections/AmenitySection'
+import { IcalSyncSection } from '@/components/sections/IcalSyncSection'
 
 const reviewStatusLabel: Record<string, { label: string; variant: 'pending' | 'success' | 'danger' | 'default' }> = {
   PENDING: { label: 'รอการตรวจสอบ', variant: 'pending' },
@@ -244,11 +248,11 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
         </Section>
 
         <Section num={4} title="ข้อมูลพื้นที่" description="ที่ตั้ง + พิกัด + ระยะทาง">
-          <PlaceholderUnderConstruction />
+          <LocationSection propertyId={id} />
         </Section>
 
         <Section num={5} title="จุดเด่น ฟังก์ชัน และสิ่งอำนวยความสะดวก">
-          <PlaceholderUnderConstruction />
+          <AmenitySection propertyId={id} />
         </Section>
 
         <Section num={6} title="รูปภาพ" description="ปก + แกลเลอรี + 7 photo tours + 3D">
@@ -256,11 +260,11 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
         </Section>
 
         <Section num={7} title="ซิงค์ข้อมูลปฏิทิน" description="iCal URLs: Agoda / Booking / Airbnb / Trip / Expedia">
-          <PlaceholderUnderConstruction />
+          <IcalSyncSection propertyId={id} />
         </Section>
 
         <Section num={8} title="กฎ และนโยบายที่พัก" description="เวลา check-in/out · นโยบายยกเลิก · แขกเพิ่ม · สัตว์เลี้ยง">
-          <PlaceholderUnderConstruction />
+          <PolicySection propertyId={id} />
         </Section>
       </div>
     </div>
