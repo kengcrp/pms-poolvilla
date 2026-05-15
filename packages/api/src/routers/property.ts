@@ -63,7 +63,7 @@ export const propertyRouter = router({
           totalBathrooms: input.totalBathrooms,
           areaSqwa: input.areaSqwa,
           contactInfo: input.contactInfo,
-          reviewStatus: 'PENDING',
+          reviewStatus: 'ACTIVE', // owner self-publish (no admin review in MVP)
           isActive: true,
         },
       })
