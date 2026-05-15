@@ -19,6 +19,7 @@ const menu: MenuGroup[] = [
     group: 'จัดการข้อมูล',
     items: [
       { href: '/manage/calendar', label: 'ปฏิทิน', icon: '📅' },
+      { href: '/manage/bookings', label: 'การจอง', icon: '📋' },
       { href: '/manage/pricing', label: 'ปรับราคา', icon: '💰' },
       { href: '/manage/listings', label: 'ลิสติ้งที่พัก', icon: '🏠' },
       { href: '/manage/postpone', label: 'เลื่อนวันเข้าพัก', icon: '🔁' },

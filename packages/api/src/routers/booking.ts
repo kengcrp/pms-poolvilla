@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { prisma } from '@pms/db'
 import { router, ownerProcedure } from '../trpc'
 import { BookingService } from '../lib/booking-service'
 
@@ -81,6 +82,56 @@ export const bookingRouter = router({
   cancel: ownerProcedure
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) => BookingService.cancelBooking(input.id, ctx.ownerId)),
+
+  confirmPending: ownerProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(({ ctx, input }) => BookingService.confirmPending(input.id, ctx.ownerId)),
+
+  list: ownerProcedure
+    .input(
+      z
+        .object({
+          status: z
+            .enum(['PENDING_PAYMENT', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'AUTO_CANCELLED'])
+            .optional(),
+          search: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(({ ctx, input }) => {
+      const search = input?.search?.trim()
+      return prisma.booking.findMany({
+        where: {
+          deletedAt: null,
+          property: { ownerId: ctx.ownerId, deletedAt: null },
+          ...(input?.status && { status: input.status }),
+          ...(search && {
+            OR: [
+              { customerName: { contains: search } },
+              { bookerName: { contains: search } },
+              { customerPhone: { contains: search } },
+            ],
+          }),
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+        include: {
+          property: { select: { id: true, code: true, name: true } },
+          variant: { select: { id: true, name: true, bedrooms: true } },
+        },
+      })
+    }),
+
+  byId: ownerProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    return prisma.booking.findFirst({
+      where: { id: input.id, property: { ownerId: ctx.ownerId, deletedAt: null } },
+      include: {
+        property: { select: { id: true, code: true, name: true } },
+        variant: true,
+        calendarCells: { orderBy: { date: 'asc' } },
+      },
+    })
+  }),
 
   /** Inspect what's at a specific (variant, date) cell. */
   atDate: ownerProcedure

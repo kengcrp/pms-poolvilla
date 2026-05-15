@@ -239,6 +239,27 @@ export const BookingService = {
     })
   },
 
+  async confirmPending(bookingId: string, ownerId: string) {
+    return prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findFirst({
+        where: { id: bookingId, property: { ownerId, deletedAt: null } },
+      })
+      if (!booking) throw new TRPCError({ code: 'NOT_FOUND', message: 'ไม่พบการจอง' })
+      if (booking.status !== 'PENDING_PAYMENT') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'การจองนี้ไม่ได้อยู่ในสถานะรอชำระ' })
+      }
+      // Promote calendar cells PENDING_PAYMENT → BOOKED
+      await tx.variantCalendar.updateMany({
+        where: { bookingId },
+        data: { status: 'BOOKED' as CalendarStatus },
+      })
+      return tx.booking.update({
+        where: { id: bookingId },
+        data: { status: 'CONFIRMED' as BookingStatus, paymentDueAt: null },
+      })
+    })
+  },
+
   async unblockDates(input: { variantId: string; ownerId: string; checkin: Date | string; checkout: Date | string }) {
     return prisma.$transaction(async (tx) => {
       await assertVariantOwn(tx, input.variantId, input.ownerId)
