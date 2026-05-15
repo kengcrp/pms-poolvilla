@@ -19,6 +19,8 @@ const typeLabel: Record<string, string> = {
 
 export default function ListingsPage() {
   const { data, isPending, error } = trpc.property.list.useQuery()
+  const properties = data?.properties ?? []
+  const slug = data?.ownerSaleSlug
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -26,7 +28,7 @@ export default function ListingsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">ลิสติ้งที่พัก</h1>
           <p className="mt-1 text-sm text-gray-600">
-            {isPending ? 'กำลังโหลด...' : `ที่พักทั้งหมด ${data?.length ?? 0} รายการ`}
+            {isPending ? 'กำลังโหลด...' : `ที่พักทั้งหมด ${properties.length} รายการ`}
           </p>
         </div>
         <Link href="/manage/listings/new">
@@ -43,7 +45,7 @@ export default function ListingsPage() {
         </div>
       )}
 
-      {!isPending && data && data.length === 0 && (
+      {!isPending && properties.length === 0 && (
         <Card className="flex flex-col items-center p-12 text-center">
           <div className="mb-3 flex size-14 items-center justify-center rounded-2xl bg-gray-100 text-3xl">🏡</div>
           <h3 className="text-base font-semibold text-gray-900">ยังไม่มีที่พัก</h3>
@@ -55,7 +57,7 @@ export default function ListingsPage() {
       )}
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {data?.map((p) => {
+        {properties.map((p) => {
           const name = (p.name as { th?: string })?.th ?? p.code
           const status = reviewStatusLabel[p.reviewStatus] ?? reviewStatusLabel.PENDING!
           const cover = p.images[0]?.url
@@ -103,17 +105,44 @@ export default function ListingsPage() {
                   )}
                 </div>
 
-                <div className="mt-4 flex items-center gap-2">
-                  <Link href={`/manage/listings/${p.id}/edit`} className="flex-1">
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <Link href={`/manage/listings/${p.id}/edit`}>
                     <Button variant="secondary" size="sm" className="w-full">
                       แก้ไข
                     </Button>
                   </Link>
-                  <Link href={`/manage/calendar?property=${p.id}`} className="flex-1">
+                  <Link href={`/manage/calendar?property=${p.id}`}>
                     <Button size="sm" className="w-full">
                       ปฏิทิน
                     </Button>
                   </Link>
+                  {slug && p.reviewStatus === 'ACTIVE' && p.isActive ? (
+                    <a
+                      href={`/sale/${slug}/${p.code}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Button variant="outline" size="sm" className="w-full">
+                        ดูที่พัก ↗
+                      </Button>
+                    </a>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full opacity-50"
+                      disabled
+                      title={
+                        !p.isActive
+                          ? 'หยุดให้บริการ'
+                          : p.reviewStatus !== 'ACTIVE'
+                            ? 'ยังไม่เผยแพร่'
+                            : 'ยังไม่ได้ตั้ง slug'
+                      }
+                    >
+                      ดูที่พัก
+                    </Button>
+                  )}
                 </div>
               </div>
             </Card>

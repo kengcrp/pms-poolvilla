@@ -15,18 +15,25 @@ async function assertOwn(propertyId: string, ownerId: string) {
 }
 
 export const propertyRouter = router({
-  list: ownerProcedure.query(({ ctx }) =>
-    prisma.property.findMany({
-      where: { ownerId: ctx.ownerId, deletedAt: null },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        location: { include: { location: true, zone: true } },
-        images: { where: { type: 'cover' }, take: 1 },
-        variants: { orderBy: { sortOrder: 'asc' } },
-        _count: { select: { bookings: { where: { deletedAt: null } } } },
-      },
-    }),
-  ),
+  list: ownerProcedure.query(async ({ ctx }) => {
+    const [owner, properties] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: ctx.ownerId },
+        select: { saleSlug: true },
+      }),
+      prisma.property.findMany({
+        where: { ownerId: ctx.ownerId, deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          location: { include: { location: true, zone: true } },
+          images: { where: { type: 'cover' }, take: 1 },
+          variants: { orderBy: { sortOrder: 'asc' } },
+          _count: { select: { bookings: { where: { deletedAt: null } } } },
+        },
+      }),
+    ])
+    return { ownerSaleSlug: owner?.saleSlug ?? null, properties }
+  }),
 
   byId: ownerProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
     await assertOwn(input.id, ctx.ownerId)

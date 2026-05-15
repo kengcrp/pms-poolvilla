@@ -11,6 +11,7 @@ import { StatusLegend } from '@/components/StatusLegend'
 
 export default function PricingPage() {
   const { data, isPending } = trpc.property.list.useQuery()
+  const properties = data?.properties ?? []
   const [editing, setEditing] = useState<{ variantId: string; name: string } | null>(null)
 
   return (
@@ -24,7 +25,7 @@ export default function PricingPage() {
 
       {isPending && <div className="text-sm text-gray-500">กำลังโหลด...</div>}
 
-      {!isPending && data && data.length === 0 && (
+      {!isPending && properties.length === 0 && (
         <Card className="flex flex-col items-center p-12 text-center">
           <div className="mb-3 flex size-14 items-center justify-center rounded-2xl bg-gray-100 text-3xl">💰</div>
           <p className="text-sm text-gray-600">ยังไม่มีที่พัก — สร้างที่พักก่อนเพื่อกำหนดราคา</p>
@@ -35,7 +36,7 @@ export default function PricingPage() {
       )}
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {data?.map((p) => {
+        {properties.map((p) => {
           const name = (p.name as { th?: string })?.th ?? p.code
           const defaultVariant = p.variants.find((v) => v.isDefault)
           if (!defaultVariant) return null
