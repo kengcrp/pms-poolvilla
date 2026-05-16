@@ -4,6 +4,7 @@ import { prisma, Prisma } from '@pms/db'
 import { router, publicProcedure } from '../trpc'
 import { BookingService } from '../lib/booking-service'
 import { getCalendarRange } from '../lib/calendar'
+import { calcCouponDiscount } from '../schemas/coupon'
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 
@@ -100,6 +101,38 @@ export const publicRouter = router({
       return getCalendarRange(input.variantId, new Date(input.from), new Date(input.to))
     }),
 
+  /** Public coupon validation — uses slug to scope owner */
+  validateCoupon: publicProcedure
+    .input(z.object({ slug: z.string(), code: z.string().min(1), basePrice: z.number().nonnegative() }))
+    .query(async ({ input }) => {
+      const owner = await prisma.user.findUnique({
+        where: { saleSlug: input.slug },
+        select: { id: true },
+      })
+      if (!owner) return { ok: false as const, reason: 'ไม่พบหน้าร้าน' }
+      const code = input.code.trim().toUpperCase()
+      const coupon = await prisma.coupon.findFirst({
+        where: { ownerId: owner.id, code },
+      })
+      if (!coupon) return { ok: false as const, reason: 'ไม่พบรหัสคูปอง' }
+      const now = new Date()
+      if (now < coupon.startsAt) return { ok: false as const, reason: 'คูปองยังไม่เริ่ม' }
+      if (now > coupon.expiresAt) return { ok: false as const, reason: 'คูปองหมดอายุ' }
+      if (coupon.qtyLeft <= 0) return { ok: false as const, reason: 'คูปองหมด' }
+      const discount = calcCouponDiscount({
+        type: coupon.type,
+        format: coupon.format,
+        value: Number(coupon.value),
+        basePrice: input.basePrice,
+      })
+      return {
+        ok: true as const,
+        code: coupon.code,
+        couponId: coupon.id,
+        discount,
+      }
+    }),
+
   /** Public booking submission — creates PENDING_PAYMENT (24h auto-cancel). */
   submitBooking: publicProcedure
     .input(
@@ -112,6 +145,7 @@ export const publicRouter = router({
         customerPhone: z.string().min(1).max(40),
         guestCount: z.number().int().min(1).max(100),
         message: z.string().max(500).optional(),
+        couponCode: z.string().optional(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -138,7 +172,30 @@ export const publicRouter = router({
         .slice(0, -1) // exclude checkout day
         .reduce((sum, d) => sum + d.price, 0)
 
-      // Create booking via BookingService — atomic with calendar
+      // Resolve coupon if provided
+      let couponId: string | undefined
+      let finalTotal = nightTotal
+      if (input.couponCode) {
+        const code = input.couponCode.trim().toUpperCase()
+        const coupon = await prisma.coupon.findFirst({
+          where: { ownerId: variant.property.owner.id, code },
+        })
+        if (!coupon) throw new TRPCError({ code: 'NOT_FOUND', message: 'ไม่พบรหัสคูปอง' })
+        const now = new Date()
+        if (now < coupon.startsAt) throw new TRPCError({ code: 'BAD_REQUEST', message: 'คูปองยังไม่เริ่ม' })
+        if (now > coupon.expiresAt) throw new TRPCError({ code: 'BAD_REQUEST', message: 'คูปองหมดอายุ' })
+        if (coupon.qtyLeft <= 0) throw new TRPCError({ code: 'CONFLICT', message: 'คูปองหมดแล้ว' })
+        const discount = calcCouponDiscount({
+          type: coupon.type,
+          format: coupon.format,
+          value: Number(coupon.value),
+          basePrice: nightTotal,
+        })
+        couponId = coupon.id
+        finalTotal = Math.max(0, nightTotal - discount)
+      }
+
+      // Create booking via BookingService — atomic with calendar + coupon decrement
       const booking = await BookingService.createPending({
         variantId: input.variantId,
         ownerId: variant.property.owner.id,
@@ -148,10 +205,11 @@ export const publicRouter = router({
         customerPhone: input.customerPhone,
         bookerName: input.customerName,
         guestCount: input.guestCount,
-        total: nightTotal,
+        total: finalTotal,
         deposit: 0,
         paymentDueAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
         publicNote: input.message,
+        couponId,
       })
 
       // Override source to PUBLIC_SALE_PAGE (BookingService defaults to OWNER_DIRECT)
@@ -160,6 +218,6 @@ export const publicRouter = router({
         data: { source: 'PUBLIC_SALE_PAGE' as Prisma.EnumBookingSourceFieldUpdateOperationsInput['set'] },
       })
 
-      return { ok: true, bookingId: booking.id, total: nightTotal }
+      return { ok: true, bookingId: booking.id, total: finalTotal, originalTotal: nightTotal }
     }),
 })

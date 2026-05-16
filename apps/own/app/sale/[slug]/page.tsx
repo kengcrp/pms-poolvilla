@@ -1,14 +1,46 @@
 'use client'
 
-import { use } from 'react'
+import { use, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { trpc } from '@/lib/trpc'
-import { Badge } from '@pms/ui'
+import { Badge, Input, Select, cn } from '@pms/ui'
 
 export default function SaleLandingPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
   const { data, isPending, error } = trpc.public.ownerBySlug.useQuery({ slug })
+
+  const [search, setSearch] = useState('')
+  const [locationId, setLocationId] = useState('')
+  const [minBed, setMinBed] = useState(0)
+  const [poolOnly, setPoolOnly] = useState(false)
+
+  // Unique locations from properties
+  const locations = useMemo(() => {
+    if (!data) return []
+    const m = new Map<string, { id: string; name: string; count: number }>()
+    for (const p of data.properties) {
+      const loc = p.location?.location
+      if (!loc) continue
+      const e = m.get(loc.id)
+      if (e) e.count++
+      else m.set(loc.id, { id: loc.id, name: loc.name, count: 1 })
+    }
+    return Array.from(m.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [data])
+
+  const filtered = useMemo(() => {
+    if (!data) return []
+    const q = search.trim().toLowerCase()
+    return data.properties.filter((p) => {
+      const name = (p.name as { th?: string })?.th?.toLowerCase() ?? p.code.toLowerCase()
+      if (q && !name.includes(q) && !p.code.toLowerCase().includes(q)) return false
+      if (locationId && p.location?.locationId !== locationId) return false
+      if (minBed > 0 && p.totalBedrooms < minBed) return false
+      if (poolOnly && p.pools.length === 0) return false
+      return true
+    })
+  }, [data, search, locationId, minBed, poolOnly])
 
   if (error?.data?.code === 'NOT_FOUND') notFound()
 
@@ -53,14 +85,71 @@ export default function SaleLandingPage({ params }: { params: Promise<{ slug: st
           <p className="mt-1 text-sm text-gray-600">เลือกที่พักที่คุณสนใจ ตรวจสอบวันว่าง และจองได้ทันที</p>
         </div>
 
+        {/* Filters */}
+        <div className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-gray-200 bg-white p-4 sm:grid-cols-[2fr_1fr_1fr_auto]">
+          <Input
+            placeholder="ค้นหาชื่อที่พัก..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+            <option value="">ทุกพื้นที่</option>
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name} ({l.count})
+              </option>
+            ))}
+          </Select>
+          <Select value={String(minBed)} onChange={(e) => setMinBed(Number(e.target.value))}>
+            <option value="0">ห้องนอนทุกขนาด</option>
+            <option value="1">1+ ห้องนอน</option>
+            <option value="2">2+ ห้องนอน</option>
+            <option value="3">3+ ห้องนอน</option>
+            <option value="4">4+ ห้องนอน</option>
+            <option value="5">5+ ห้องนอน</option>
+          </Select>
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2.5 transition-colors hover:bg-gray-50">
+            <input
+              type="checkbox"
+              checked={poolOnly}
+              onChange={(e) => setPoolOnly(e.target.checked)}
+              className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+            />
+            <span className="whitespace-nowrap text-sm text-gray-700">💧 มีสระเท่านั้น</span>
+          </label>
+        </div>
+
+        <div className="mb-3 text-xs text-gray-500">
+          พบ {filtered.length} จาก {data.properties.length} ที่พัก
+          {(search || locationId || minBed > 0 || poolOnly) && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch('')
+                setLocationId('')
+                setMinBed(0)
+                setPoolOnly(false)
+              }}
+              className="ml-2 text-brand-700 hover:underline"
+            >
+              ล้างตัวกรอง
+            </button>
+          )}
+        </div>
+
         {data.properties.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center">
             <div className="mb-3 text-4xl">🏝️</div>
             <p className="text-sm text-gray-500">ยังไม่มีที่พักเปิดให้บริการในขณะนี้</p>
           </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center">
+            <div className="mb-3 text-4xl">🔍</div>
+            <p className="text-sm text-gray-500">ไม่พบที่พักตามเงื่อนไข — ลองปรับตัวกรอง</p>
+          </div>
         ) : (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {data.properties.map((p) => {
+            {filtered.map((p) => {
               const name = (p.name as { th?: string })?.th ?? p.code
               const cover = p.images[0]?.url
               const variant = p.variants[0]
@@ -89,6 +178,11 @@ export default function SaleLandingPage({ params }: { params: Promise<{ slug: st
                         📍 {p.location.location.name}
                       </div>
                     )}
+                    {hasPool && (
+                      <div className="absolute right-3 top-3 rounded-full bg-blue-500/90 px-2.5 py-1 text-xs font-medium text-white shadow-sm backdrop-blur">
+                        💧 มีสระ
+                      </div>
+                    )}
                   </div>
                   <div className="p-5">
                     <h3 className="text-base font-semibold text-gray-900">{name}</h3>
@@ -96,9 +190,8 @@ export default function SaleLandingPage({ params }: { params: Promise<{ slug: st
                       <span>🛏 {p.totalBedrooms} ห้องนอน</span>
                       <span>🛁 {p.totalBathrooms} ห้องน้ำ</span>
                       {variant && <span>👥 {variant.maxGuests} ท่าน</span>}
-                      {hasPool && <Badge variant="info">💧 มีสระ</Badge>}
                     </div>
-                    <div className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-brand-700 group-hover:gap-2 transition-all">
+                    <div className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-brand-700 transition-all group-hover:gap-2">
                       ดูรายละเอียดและจอง
                       <svg className="size-4" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />

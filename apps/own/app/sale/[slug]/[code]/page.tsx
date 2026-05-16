@@ -6,7 +6,8 @@ import { notFound } from 'next/navigation'
 import { trpc } from '@/lib/trpc'
 import { Badge, Button, Input, Label, Textarea } from '@pms/ui'
 import { PublicCalendar } from '@/components/PublicCalendar'
-import { formatBahtFull, ymd, ymdLocal } from '@/lib/date'
+import { Lightbox } from '@/components/Lightbox'
+import { formatBahtFull, ymd } from '@/lib/date'
 
 const POOL_OWNERSHIP_LABEL = { PRIVATE: 'ส่วนตัว', SHARED: 'ใช้ร่วม' } as const
 const POOL_SYSTEM_LABEL: Record<string, string> = {
@@ -19,6 +20,7 @@ const POOL_SYSTEM_LABEL: Record<string, string> = {
 
 export default function PropertyDetailPage({ params }: { params: Promise<{ slug: string; code: string }> }) {
   const { slug, code } = use(params)
+  const utils = trpc.useUtils()
   const { data: property, isPending, error } = trpc.public.propertyByCode.useQuery({ slug, code })
 
   const defaultVariant = property?.variants.find((v) => v.isDefault) ?? property?.variants[0]
@@ -31,9 +33,32 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ slug:
     customerPhone: '',
     guestCount: 2,
     message: '',
+    couponCode: '',
   })
-  const [submitState, setSubmitState] = useState<{ ok: boolean; bookingId: string; total: number } | null>(null)
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null)
+  const [validatingCoupon, setValidatingCoupon] = useState(false)
+  const [submitState, setSubmitState] = useState<{ ok: boolean; bookingId: string; total: number; originalTotal: number } | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null)
+
+  // Live price preview from calendar query
+  const priceRange = trpc.public.calendarRange.useQuery(
+    {
+      slug,
+      variantId,
+      from: range.from ?? '',
+      to: range.to ?? '',
+    },
+    { enabled: !!variantId && !!range.from && !!range.to },
+  )
+
+  const nights = useMemo(() => {
+    if (!range.from || !range.to) return []
+    return (priceRange.data ?? []).slice(0, -1) // exclude checkout day
+  }, [priceRange.data, range.from, range.to])
+
+  const baseTotal = useMemo(() => nights.reduce((s, n) => s + n.price, 0), [nights])
+  const finalTotal = appliedCoupon ? Math.max(0, baseTotal - appliedCoupon.discount) : baseTotal
 
   const submit = trpc.public.submitBooking.useMutation({
     onSuccess: (res) => {
@@ -57,8 +82,11 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ slug:
   const cover = property.images.find((i) => i.type === 'cover')
   const tours = property.images.filter((i) => i.type === 'tour')
   const tour360 = property.images.find((i) => i.type === 'tour_360')
+  const allPhotos = [cover, ...tours].filter((x): x is NonNullable<typeof x> => !!x)
 
   function onCellClick(date: Date) {
+    setAppliedCoupon(null)
+    setForm((f) => ({ ...f, couponCode: '' }))
     const key = ymd(date)
     if (!range.from || (range.from && range.to)) {
       setRange({ from: key })
@@ -66,10 +94,31 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ slug:
     } else if (key < range.from) {
       setRange({ from: key })
     } else {
-      // checkout = next morning of last clicked night
       const next = new Date(date)
       next.setUTCDate(next.getUTCDate() + 1)
       setRange({ from: range.from, to: ymd(next) })
+    }
+  }
+
+  async function applyCoupon() {
+    setSubmitError(null)
+    if (!form.couponCode.trim() || baseTotal <= 0) return
+    setValidatingCoupon(true)
+    try {
+      const res = await utils.public.validateCoupon.fetch({
+        slug,
+        code: form.couponCode,
+        basePrice: baseTotal,
+      })
+      if (!res.ok) {
+        setAppliedCoupon(null)
+        return setSubmitError(res.reason ?? 'คูปองใช้ไม่ได้')
+      }
+      setAppliedCoupon({ code: res.code, discount: res.discount })
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด')
+    } finally {
+      setValidatingCoupon(false)
     }
   }
 
@@ -88,6 +137,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ slug:
       customerPhone: form.customerPhone.trim(),
       guestCount: form.guestCount,
       message: form.message.trim() || undefined,
+      couponCode: appliedCoupon ? form.couponCode.trim() : undefined,
     })
   }
 
@@ -114,27 +164,53 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ slug:
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-8">
-        {/* Hero */}
-        <div className="mb-8 grid gap-4 lg:grid-cols-[2fr_1fr]">
-          <div className="overflow-hidden rounded-2xl bg-gray-100">
-            {cover ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={cover.url} alt={name} className="aspect-[16/10] w-full object-cover" />
-            ) : (
-              <div className="flex aspect-[16/10] items-center justify-center text-7xl text-gray-300">🏠</div>
-            )}
-          </div>
+        {/* Hero with clickable images */}
+        <div className="mb-8 grid gap-2 lg:grid-cols-[2fr_1fr]">
+          {cover && (
+            <button
+              type="button"
+              onClick={() => setLightboxIdx(0)}
+              className="group overflow-hidden rounded-2xl bg-gray-100"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={cover.url}
+                alt={name}
+                className="aspect-[16/10] w-full object-cover transition-transform group-hover:scale-105"
+              />
+            </button>
+          )}
+          {!cover && (
+            <div className="flex aspect-[16/10] items-center justify-center overflow-hidden rounded-2xl bg-gray-100 text-7xl text-gray-300">
+              🏠
+            </div>
+          )}
           {tours.length > 0 && (
             <div className="grid grid-cols-2 gap-2">
-              {tours.slice(0, 4).map((img) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+              {tours.slice(0, 4).map((img, idx) => (
+                <button
                   key={img.id}
-                  src={img.url}
-                  alt=""
-                  className="aspect-square w-full rounded-xl object-cover"
-                />
+                  type="button"
+                  onClick={() => setLightboxIdx(idx + (cover ? 1 : 0))}
+                  className="group overflow-hidden rounded-xl bg-gray-100"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={img.url}
+                    alt=""
+                    className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
+                  />
+                </button>
               ))}
+              {tours.length > 4 && (
+                <button
+                  type="button"
+                  onClick={() => setLightboxIdx((cover ? 1 : 0) + 4)}
+                  className="col-span-2 flex items-center justify-center rounded-xl bg-gray-100 px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-200"
+                >
+                  + อีก {tours.length - 4} รูป
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -247,6 +323,21 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ slug:
                 </a>
               </div>
             )}
+
+            {property.location?.gmapUrl && (
+              <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                <h3 className="mb-2 text-sm font-semibold text-gray-900">📍 ที่ตั้ง</h3>
+                <p className="mb-3 text-sm text-gray-700">{property.location.address}</p>
+                <a
+                  href={property.location.gmapUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-brand-700 hover:underline"
+                >
+                  เปิดใน Google Maps →
+                </a>
+              </div>
+            )}
           </div>
 
           {/* Right: booking sidebar */}
@@ -266,6 +357,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ slug:
                           onClick={() => {
                             setSelectedVariantId(v.id)
                             setRange({})
+                            setAppliedCoupon(null)
                           }}
                           className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${active ? 'border-brand-500 bg-brand-50 text-brand-800' : 'border-gray-200 hover:border-gray-300'}`}
                         >
@@ -294,14 +386,40 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ slug:
                     <span className="font-semibold text-brand-800">
                       {range.from} {range.to && `→ ${range.to}`}
                     </span>
+                    {nights.length > 0 && (
+                      <span className="ml-2 text-brand-700">· {nights.length} คืน</span>
+                    )}
                   </div>
                   <button
                     type="button"
-                    onClick={() => setRange({})}
+                    onClick={() => {
+                      setRange({})
+                      setAppliedCoupon(null)
+                    }}
                     className="text-brand-700 hover:underline"
                   >
                     ล้าง
                   </button>
+                </div>
+              )}
+
+              {/* Price preview */}
+              {range.from && range.to && nights.length > 0 && (
+                <div className="mt-4 space-y-1.5 rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-sm">
+                  <div className="flex items-center justify-between text-gray-700">
+                    <span>{nights.length} คืน</span>
+                    <span>{formatBahtFull(baseTotal)}</span>
+                  </div>
+                  {appliedCoupon && (
+                    <div className="flex items-center justify-between text-emerald-700">
+                      <span>คูปอง {appliedCoupon.code}</span>
+                      <span>−{formatBahtFull(appliedCoupon.discount)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between border-t border-gray-200 pt-1.5 font-bold text-gray-900">
+                    <span>รวมทั้งสิ้น</span>
+                    <span>{formatBahtFull(finalTotal)}</span>
+                  </div>
                 </div>
               )}
 
@@ -333,6 +451,51 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ slug:
                     onChange={(e) => setForm({ ...form, guestCount: Number(e.target.value) })}
                   />
                 </div>
+
+                {/* Coupon */}
+                {baseTotal > 0 && (
+                  <div>
+                    <Label>คูปอง (ถ้ามี)</Label>
+                    {appliedCoupon ? (
+                      <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                        <span className="font-mono text-xs font-semibold text-emerald-800">
+                          ✓ {appliedCoupon.code}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAppliedCoupon(null)
+                            setForm({ ...form, couponCode: '' })
+                          }}
+                          className="text-xs text-emerald-700 hover:underline"
+                        >
+                          ลบ
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          value={form.couponCode}
+                          onChange={(e) =>
+                            setForm({ ...form, couponCode: e.target.value.toUpperCase() })
+                          }
+                          placeholder="รหัสคูปอง"
+                          className="font-mono"
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="md"
+                          onClick={applyCoupon}
+                          disabled={!form.couponCode || validatingCoupon}
+                        >
+                          {validatingCoupon ? '...' : 'ใช้'}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div>
                   <Label>ข้อความถึงเจ้าของ (ไม่บังคับ)</Label>
                   <Textarea
@@ -353,7 +516,14 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ slug:
                   <div className="rounded-lg bg-emerald-50 px-3 py-3 text-sm text-emerald-800 ring-1 ring-inset ring-emerald-200">
                     <div className="font-semibold">✓ ส่งคำขอจองเรียบร้อย</div>
                     <div className="mt-1 text-xs">
-                      ราคารวม: {formatBahtFull(submitState.total ?? 0)} · เจ้าของจะติดต่อกลับภายใน 24 ชม.
+                      ราคารวม: {formatBahtFull(submitState.total)}
+                      {submitState.originalTotal !== submitState.total && (
+                        <span className="ml-1 text-emerald-700">
+                          (ลดจาก {formatBahtFull(submitState.originalTotal)})
+                        </span>
+                      )}
+                      <br />
+                      เจ้าของจะติดต่อกลับภายใน 24 ชม.
                     </div>
                   </div>
                 ) : (
@@ -376,6 +546,13 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ slug:
           © {new Date().getFullYear()} {property.owner.name} — ขับเคลื่อนโดย PMS Pool Villa
         </div>
       </footer>
+
+      <Lightbox
+        images={allPhotos.map((p) => ({ id: p.id, url: p.url }))}
+        openIdx={lightboxIdx}
+        onClose={() => setLightboxIdx(null)}
+        onNav={setLightboxIdx}
+      />
     </>
   )
 }
