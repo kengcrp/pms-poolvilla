@@ -1,7 +1,12 @@
 import type { Metadata } from 'next'
 import { Inter, Noto_Sans_Thai } from 'next/font/google'
 import { SessionProvider } from 'next-auth/react'
+import { config } from '@fortawesome/fontawesome-svg-core'
+import '@fortawesome/fontawesome-svg-core/styles.css'
 import './globals.css'
+
+// Prevent FA from injecting its CSS — we import it manually above
+config.autoAddCss = false
 
 const inter = Inter({
   variable: '--font-inter',

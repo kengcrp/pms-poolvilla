@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc'
-import { Badge, Button, Card } from '@pms/ui'
+import { Badge, Button, Card, Icon } from '@pms/ui'
 import { MiniCalendar } from '@/components/MiniCalendar'
 import { BookingModal } from '@/components/BookingModal'
 import { PageHeader } from '@/components/PageHeader'
@@ -27,10 +27,14 @@ export default function CalendarPage() {
 
       {!isPending && properties.length === 0 && (
         <Card className="flex flex-col items-center p-12 text-center">
-          <div className="mb-3 flex size-14 items-center justify-center rounded-2xl bg-gray-100 text-3xl">📅</div>
+          <div className="mb-3 flex size-14 items-center justify-center rounded-2xl bg-gray-100 text-2xl text-gray-400">
+            <Icon name="calendar" />
+          </div>
           <p className="text-sm text-gray-600">ยังไม่มีที่พัก</p>
           <Link href="/manage/listings/new" className="mt-4">
-            <Button>+ เพิ่มที่พัก</Button>
+            <Button>
+              <Icon name="plus" className="size-3.5" /> เพิ่มที่พัก
+            </Button>
           </Link>
         </Card>
       )}
@@ -51,9 +55,13 @@ export default function CalendarPage() {
                     <div className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
                       <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10.5px]">{p.code}</code>
                       <span>·</span>
-                      <span>🛏 {defaultVariant.bedrooms}</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Icon name="bed" className="size-3 text-gray-400" /> {defaultVariant.bedrooms}
+                      </span>
                       <span>·</span>
-                      <span>👥 {defaultVariant.maxGuests}</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Icon name="users" className="size-3 text-gray-400" /> {defaultVariant.maxGuests}
+                      </span>
                     </div>
                   </div>
                   {p.variants.length > 1 && <Badge variant="brand">แบ่ง {p.variants.length}</Badge>}
@@ -76,8 +84,10 @@ export default function CalendarPage() {
                           <div key={v.id}>
                             <div className="mb-2 flex items-center gap-2">
                               <span className="text-xs font-semibold text-gray-600">{vName}</span>
-                              <span className="text-[10.5px] text-gray-400">
-                                👥 {v.maxGuests} · 🛏 {v.bedrooms}
+                              <span className="inline-flex items-center gap-1.5 text-[10.5px] text-gray-400">
+                                <Icon name="users" className="size-2.5" /> {v.maxGuests}
+                                <span>·</span>
+                                <Icon name="bed" className="size-2.5" /> {v.bedrooms}
                               </span>
                             </div>
                             <MiniCalendar

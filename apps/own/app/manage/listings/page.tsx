@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc'
-import { Badge, Button, Card } from '@pms/ui'
+import { Badge, Button, Card, Icon } from '@pms/ui'
 
 const reviewStatusLabel: Record<string, { label: string; variant: 'pending' | 'success' | 'danger' | 'default' }> = {
   PENDING: { label: 'รอการตรวจสอบ', variant: 'pending' },
@@ -33,7 +33,7 @@ export default function ListingsPage() {
         </div>
         <Link href="/manage/listings/new">
           <Button>
-            <svg className="size-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" /></svg>
+            <Icon name="plus" className="size-3.5" />
             เพิ่มที่พัก
           </Button>
         </Link>
@@ -47,11 +47,15 @@ export default function ListingsPage() {
 
       {!isPending && properties.length === 0 && (
         <Card className="flex flex-col items-center p-12 text-center">
-          <div className="mb-3 flex size-14 items-center justify-center rounded-2xl bg-gray-100 text-3xl">🏡</div>
+          <div className="mb-3 flex size-14 items-center justify-center rounded-2xl bg-gray-100 text-2xl text-gray-400">
+            <Icon name="home" />
+          </div>
           <h3 className="text-base font-semibold text-gray-900">ยังไม่มีที่พัก</h3>
           <p className="mt-1 text-sm text-gray-500">เริ่มต้นเพิ่มที่พักหลังแรกของคุณ</p>
           <Link href="/manage/listings/new" className="mt-5">
-            <Button>+ เพิ่มที่พักหลังแรก</Button>
+            <Button>
+              <Icon name="plus" className="size-3.5" /> เพิ่มที่พักหลังแรก
+            </Button>
           </Link>
         </Card>
       )}
@@ -68,11 +72,13 @@ export default function ListingsPage() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={cover} alt={name} className="size-full object-cover" />
                 ) : (
-                  <div className="flex size-full items-center justify-center text-5xl text-gray-300">🏠</div>
+                  <div className="flex size-full items-center justify-center text-5xl text-gray-300">
+                    <Icon name="home" />
+                  </div>
                 )}
                 {p.location?.location && (
-                  <div className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur">
-                    <svg className="size-3.5 text-brand-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9.69 18.933l.003.001C9.89 19.02 10 19 10 19s.11.02.308-.066l.002-.001.006-.003.018-.008a5.741 5.741 0 00.281-.14c.186-.096.446-.24.757-.433.62-.384 1.445-.966 2.274-1.765C15.302 14.988 17 12.493 17 9A7 7 0 103 9c0 3.492 1.698 5.988 3.355 7.584a13.731 13.731 0 002.273 1.765 11.842 11.842 0 00.976.544l.062.029.018.008.006.003zM10 11.25a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5z" clipRule="evenodd" /></svg>
+                  <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur">
+                    <Icon name="pin" className="size-3 text-brand-600" />
                     {p.location.location.name}
                   </div>
                 )}
@@ -96,8 +102,12 @@ export default function ListingsPage() {
                 </div>
 
                 <div className="mt-3 flex items-center gap-3 text-xs text-gray-600">
-                  <span className="flex items-center gap-1">🛏 {p.totalBedrooms} ห้องนอน</span>
-                  <span className="flex items-center gap-1">🛁 {p.totalBathrooms} ห้องน้ำ</span>
+                  <span className="flex items-center gap-1.5">
+                    <Icon name="bed" className="size-3 text-gray-400" /> {p.totalBedrooms} ห้องนอน
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Icon name="bath" className="size-3 text-gray-400" /> {p.totalBathrooms} ห้องน้ำ
+                  </span>
                   {p.variants.length > 1 && (
                     <Badge variant="brand" className="ml-auto">
                       แบ่ง {p.variants.length}
@@ -123,7 +133,8 @@ export default function ListingsPage() {
                       rel="noopener noreferrer"
                     >
                       <Button variant="outline" size="sm" className="w-full">
-                        ดูที่พัก ↗
+                        ดูที่พัก
+                        <Icon name="external" className="size-3" />
                       </Button>
                     </a>
                   ) : (

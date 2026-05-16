@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { trpc } from '@/lib/trpc'
-import { Badge, Button, Card, Input, Label, Modal, ModalBody, ModalFooter, Textarea } from '@pms/ui'
+import { Badge, Button, Card, Icon, Input, Label, Modal, ModalBody, ModalFooter, Textarea } from '@pms/ui'
 import { PageHeader } from '@/components/PageHeader'
 import { ymdLocal } from '@/lib/date'
 
@@ -69,7 +69,7 @@ export default function HousekeeperPage() {
 
       {!isPending && summary && summary.length === 0 && (
         <Card className="flex flex-col items-center p-12 text-center">
-          <div className="mb-3 text-4xl">🧹</div>
+          <Icon name="broom" className="mb-3 text-4xl text-gray-300" />
           <p className="text-sm text-gray-500">ยังไม่มีที่พัก</p>
         </Card>
       )}
@@ -82,7 +82,7 @@ export default function HousekeeperPage() {
             <Card key={p.id} className="overflow-hidden">
               <div className="flex flex-col gap-3 p-4 md:flex-row md:items-center">
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-cyan-50 text-cyan-700">
-                  🧹
+                  <Icon name="broom" className="size-4" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="font-medium text-gray-900">{name}</div>

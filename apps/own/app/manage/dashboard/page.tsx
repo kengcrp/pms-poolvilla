@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { trpc } from '@/lib/trpc'
-import { Badge, Button, Card } from '@pms/ui'
+import { Badge, Button, Card, Icon, type IconName } from '@pms/ui'
 
 export default function DashboardPage() {
   const utils = trpc.useUtils()
@@ -28,11 +28,11 @@ export default function DashboardPage() {
       ?.filter((b) => b.status === 'CONFIRMED' || b.status === 'COMPLETED')
       .reduce((sum, b) => sum + Number(b.total), 0) ?? 0
 
-  const kpis = [
-    { label: 'จำนวนที่พัก', value: String(propCount), sub: 'หลัง', icon: '🏠', tone: 'brand' as const },
-    { label: 'การจองทั้งหมด', value: String(totalBookings), sub: 'ครั้ง', icon: '📅', tone: 'success' as const },
-    { label: 'รอชำระ', value: String(pendingCount), sub: 'รายการ', icon: '⏳', tone: 'warning' as const },
-    { label: 'ยอดรวม (CONFIRMED)', value: `฿${monthRevenue.toLocaleString()}`, sub: '', icon: '💰', tone: 'info' as const },
+  const kpis: { label: string; value: string; sub: string; icon: IconName; tone: 'brand' | 'success' | 'warning' | 'info' }[] = [
+    { label: 'จำนวนที่พัก', value: String(propCount), sub: 'หลัง', icon: 'home', tone: 'brand' },
+    { label: 'การจองทั้งหมด', value: String(totalBookings), sub: 'ครั้ง', icon: 'calendar', tone: 'success' },
+    { label: 'รอชำระ', value: String(pendingCount), sub: 'รายการ', icon: 'hourglass', tone: 'warning' },
+    { label: 'ยอดรวม (CONFIRMED)', value: `฿${monthRevenue.toLocaleString()}`, sub: '', icon: 'money', tone: 'info' },
   ]
 
   const toneClass = {
@@ -58,8 +58,8 @@ export default function DashboardPage() {
                 <div className="mt-2 text-2xl font-bold tracking-tight text-gray-900">{kpi.value}</div>
                 {kpi.sub && <div className="mt-0.5 text-xs text-gray-400">{kpi.sub}</div>}
               </div>
-              <div className={`flex size-10 items-center justify-center rounded-xl text-xl ${toneClass[kpi.tone]}`}>
-                {kpi.icon}
+              <div className={`flex size-10 items-center justify-center rounded-xl ${toneClass[kpi.tone]}`}>
+                <Icon name={kpi.icon} className="size-5" />
               </div>
             </div>
           </Card>

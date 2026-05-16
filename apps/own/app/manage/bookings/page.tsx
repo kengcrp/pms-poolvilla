@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc'
 import { useRouter } from 'next/navigation'
-import { Badge, Button, Card, Input, cn } from '@pms/ui'
+import { Badge, Button, Card, Icon, Input, cn, type IconName } from '@pms/ui'
 import { PageHeader } from '@/components/PageHeader'
 import { PostponeModal } from '@/components/PostponeModal'
 import { ymdLocal } from '@/lib/date'
@@ -42,16 +42,16 @@ const statusBadge = (s: string): { label: string; variant: 'pending' | 'success'
   }
 }
 
-const sourceBadge = (s: string): { label: string; emoji: string } => {
+const sourceBadge = (s: string): { label: string; icon: IconName } => {
   switch (s) {
     case 'OWNER_DIRECT':
-      return { label: 'จองโดยเจ้าของ', emoji: '👤' }
+      return { label: 'จองโดยเจ้าของ', icon: 'user' }
     case 'PUBLIC_SALE_PAGE':
-      return { label: 'หน้าขายสาธารณะ', emoji: '🌐' }
+      return { label: 'หน้าขายสาธารณะ', icon: 'globe' }
     case 'EXTERNAL_ICAL':
-      return { label: 'OTA (iCal)', emoji: '🔗' }
+      return { label: 'OTA (iCal)', icon: 'link' }
     default:
-      return { label: s, emoji: '•' }
+      return { label: s, icon: 'info' }
   }
 }
 
@@ -124,7 +124,7 @@ export default function BookingsPage() {
       {/* Empty state */}
       {!isPending && data && data.length === 0 && (
         <Card className="flex flex-col items-center p-12 text-center">
-          <div className="mb-3 text-4xl">📋</div>
+          <Icon name="bookings" className="mb-3 text-4xl text-gray-300" />
           <p className="text-sm text-gray-500">
             {tab === 'ALL' ? 'ยังไม่มีการจอง' : `ไม่มีการจองในสถานะ "${tabs.find((t) => t.key === tab)?.label}"`}
           </p>
@@ -153,10 +153,10 @@ export default function BookingsPage() {
                       {sBadge.label}
                     </Badge>
                     <span
-                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-600"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-600"
                       title={src.label}
                     >
-                      {src.emoji} {src.label}
+                      <Icon name={src.icon} className="size-3" /> {src.label}
                     </span>
                   </div>
                   <div className="text-base font-semibold text-gray-900">{b.customerName}</div>
@@ -198,8 +198,8 @@ export default function BookingsPage() {
                     </div>
                   )}
                   {b.paymentDueAt && b.status === 'PENDING_PAYMENT' && (
-                    <div className="mt-1 text-[10.5px] text-amber-700">
-                      ⏰ ครบกำหนด{' '}
+                    <div className="mt-1 flex items-center justify-end gap-1 text-[10.5px] text-amber-700">
+                      <Icon name="clock" className="size-3" /> ครบกำหนด{' '}
                       {new Date(b.paymentDueAt).toLocaleString('th-TH', {
                         day: 'numeric',
                         month: 'short',

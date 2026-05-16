@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc'
-import { Badge, Button, Card } from '@pms/ui'
+import { Badge, Button, Card, Icon } from '@pms/ui'
 import { MiniCalendar } from '@/components/MiniCalendar'
 import { WeeklyPricingModal } from '@/components/WeeklyPricingModal'
 import { PageHeader } from '@/components/PageHeader'
@@ -27,7 +27,9 @@ export default function PricingPage() {
 
       {!isPending && properties.length === 0 && (
         <Card className="flex flex-col items-center p-12 text-center">
-          <div className="mb-3 flex size-14 items-center justify-center rounded-2xl bg-gray-100 text-3xl">💰</div>
+          <div className="mb-3 flex size-14 items-center justify-center rounded-2xl bg-gray-100 text-2xl text-gray-400">
+            <Icon name="money" />
+          </div>
           <p className="text-sm text-gray-600">ยังไม่มีที่พัก — สร้างที่พักก่อนเพื่อกำหนดราคา</p>
           <Link href="/manage/listings/new" className="mt-4">
             <Button>+ เพิ่มที่พัก</Button>

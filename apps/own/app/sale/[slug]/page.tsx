@@ -4,7 +4,7 @@ import { use, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { trpc } from '@/lib/trpc'
-import { Badge, Input, Select, cn } from '@pms/ui'
+import { Badge, Icon, Input, Select, cn } from '@pms/ui'
 
 export default function SaleLandingPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
@@ -58,8 +58,8 @@ export default function SaleLandingPage({ params }: { params: Promise<{ slug: st
       <header className="sticky top-0 z-20 border-b border-gray-200 bg-white/85 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-brand-600 text-base text-white shadow-sm shadow-brand-600/30">
-              🏖️
+            <div className="flex size-9 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm shadow-brand-600/30">
+              <Icon name="beach" className="size-4" />
             </div>
             <div>
               <div className="text-base font-bold tracking-tight text-gray-900">{data.owner.name}</div>
@@ -69,9 +69,9 @@ export default function SaleLandingPage({ params }: { params: Promise<{ slug: st
           {data.owner.phone && (
             <a
               href={`tel:${data.owner.phone}`}
-              className="rounded-full bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100"
+              className="inline-flex items-center gap-2 rounded-full bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100"
             >
-              📞 {data.owner.phone}
+              <Icon name="phone" className="size-3.5" /> {data.owner.phone}
             </a>
           )}
         </div>
@@ -115,7 +115,8 @@ export default function SaleLandingPage({ params }: { params: Promise<{ slug: st
               onChange={(e) => setPoolOnly(e.target.checked)}
               className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
             />
-            <span className="whitespace-nowrap text-sm text-gray-700">💧 มีสระเท่านั้น</span>
+            <Icon name="water" className="size-3.5 text-blue-500" />
+            <span className="whitespace-nowrap text-sm text-gray-700">มีสระเท่านั้น</span>
           </label>
         </div>
 
@@ -139,12 +140,12 @@ export default function SaleLandingPage({ params }: { params: Promise<{ slug: st
 
         {data.properties.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center">
-            <div className="mb-3 text-4xl">🏝️</div>
+            <Icon name="beach" className="mb-3 text-4xl text-gray-300" />
             <p className="text-sm text-gray-500">ยังไม่มีที่พักเปิดให้บริการในขณะนี้</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center">
-            <div className="mb-3 text-4xl">🔍</div>
+            <Icon name="search" className="mb-3 text-4xl text-gray-300" />
             <p className="text-sm text-gray-500">ไม่พบที่พักตามเงื่อนไข — ลองปรับตัวกรอง</p>
           </div>
         ) : (
@@ -170,32 +171,39 @@ export default function SaleLandingPage({ params }: { params: Promise<{ slug: st
                       />
                     ) : (
                       <div className="flex size-full items-center justify-center text-5xl text-gray-300">
-                        🏠
+                        <Icon name="home" />
                       </div>
                     )}
                     {p.location?.location && (
-                      <div className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur">
-                        📍 {p.location.location.name}
+                      <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur">
+                        <Icon name="pin" className="size-3 text-brand-600" />
+                        {p.location.location.name}
                       </div>
                     )}
                     {hasPool && (
-                      <div className="absolute right-3 top-3 rounded-full bg-blue-500/90 px-2.5 py-1 text-xs font-medium text-white shadow-sm backdrop-blur">
-                        💧 มีสระ
+                      <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-blue-500/90 px-2.5 py-1 text-xs font-medium text-white shadow-sm backdrop-blur">
+                        <Icon name="water" className="size-3" /> มีสระ
                       </div>
                     )}
                   </div>
                   <div className="p-5">
                     <h3 className="text-base font-semibold text-gray-900">{name}</h3>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                      <span>🛏 {p.totalBedrooms} ห้องนอน</span>
-                      <span>🛁 {p.totalBathrooms} ห้องน้ำ</span>
-                      {variant && <span>👥 {variant.maxGuests} ท่าน</span>}
+                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-600">
+                      <span className="flex items-center gap-1">
+                        <Icon name="bed" className="size-3 text-gray-400" /> {p.totalBedrooms} ห้องนอน
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Icon name="bath" className="size-3 text-gray-400" /> {p.totalBathrooms} ห้องน้ำ
+                      </span>
+                      {variant && (
+                        <span className="flex items-center gap-1">
+                          <Icon name="users" className="size-3 text-gray-400" /> {variant.maxGuests} ท่าน
+                        </span>
+                      )}
                     </div>
-                    <div className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-brand-700 transition-all group-hover:gap-2">
+                    <div className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 transition-all group-hover:gap-2.5">
                       ดูรายละเอียดและจอง
-                      <svg className="size-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
-                      </svg>
+                      <Icon name="chevronRight" className="size-3" />
                     </div>
                   </div>
                 </Link>

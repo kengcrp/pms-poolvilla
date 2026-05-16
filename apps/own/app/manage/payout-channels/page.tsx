@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { trpc } from '@/lib/trpc'
-import { Badge, Button, Card, Input, Label, Modal, ModalBody, ModalFooter, Select } from '@pms/ui'
+import { Badge, Button, Card, Icon, Input, Label, Modal, ModalBody, ModalFooter, Select } from '@pms/ui'
 import { PageHeader } from '@/components/PageHeader'
 
 const BANKS = [
@@ -106,7 +106,7 @@ export default function PayoutChannelsPage() {
 
       {!isPending && data && data.length === 0 && (
         <Card className="flex flex-col items-center p-12 text-center">
-          <div className="mb-3 text-4xl">🏦</div>
+          <Icon name="bank" className="mb-3 text-4xl text-gray-300" />
           <p className="text-sm text-gray-500">ยังไม่มีบัญชี — กด &quot;+ เพิ่มบัญชี&quot; เพื่อสร้างใหม่</p>
         </Card>
       )}

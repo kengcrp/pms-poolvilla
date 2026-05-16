@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { trpc } from '@/lib/trpc'
 import { ymdLocal } from '@/lib/date'
-import { Badge, Button, Input, Label, Modal, ModalBody, ModalFooter, Select, Textarea, cn } from '@pms/ui'
+import { Badge, Button, Icon, Input, Label, Modal, ModalBody, ModalFooter, Select, Textarea, cn, type IconName } from '@pms/ui'
 
 type Tab = 'quick' | 'pending' | 'invoice' | 'block'
 
@@ -15,11 +15,11 @@ interface Props {
   initialDate: Date | null
 }
 
-const tabs: { key: Tab; label: string; icon: string }[] = [
-  { key: 'quick', label: 'จองด่วน', icon: '⚡' },
-  { key: 'pending', label: 'รอยอด', icon: '⏳' },
-  { key: 'invoice', label: 'ทำใบจอง', icon: '🧾' },
-  { key: 'block', label: 'ปิดซ่อม', icon: '🛠' },
+const tabs: { key: Tab; label: string; icon: IconName }[] = [
+  { key: 'quick', label: 'จองด่วน', icon: 'bolt' },
+  { key: 'pending', label: 'รอยอด', icon: 'hourglass' },
+  { key: 'invoice', label: 'ทำใบจอง', icon: 'receipt' },
+  { key: 'block', label: 'ปิดซ่อม', icon: 'toolbox' },
 ]
 
 const statusBadgeMap = {
@@ -234,7 +234,7 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
                   : 'text-gray-600 hover:text-gray-900',
               )}
             >
-              <span>{t.icon}</span>
+              <Icon name={t.icon} className="size-3.5" />
               <span>{t.label}</span>
             </button>
           ))}

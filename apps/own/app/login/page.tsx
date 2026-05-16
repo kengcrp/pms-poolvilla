@@ -3,7 +3,7 @@
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn } from 'next-auth/react'
-import { Button, Input, Label } from '@pms/ui'
+import { Button, Icon, Input, Label } from '@pms/ui'
 
 function LoginForm() {
   const router = useRouter()
@@ -59,7 +59,7 @@ function LoginForm() {
 
       {error && (
         <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3.5 py-2.5 text-sm text-red-700 ring-1 ring-inset ring-red-200">
-          <svg className="size-4 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 7zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+          <Icon name="warning" className="mt-0.5 size-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
@@ -67,7 +67,7 @@ function LoginForm() {
       <Button type="submit" size="lg" disabled={loading} className="w-full">
         {loading ? (
           <>
-            <svg className="size-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+            <Icon name="spinner" spin className="size-4" />
             กำลังเข้าสู่ระบบ...
           </>
         ) : (
@@ -86,8 +86,8 @@ export default function LoginPage() {
 
       <div className="relative w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-brand-600 text-2xl text-white shadow-lg shadow-brand-600/30">
-            🏖️
+          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-lg shadow-brand-600/30">
+            <Icon name="beach" className="size-6" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">PMS Pool Villa</h1>
           <p className="mt-1 text-sm text-gray-600">เข้าสู่ระบบเจ้าของที่พัก</p>

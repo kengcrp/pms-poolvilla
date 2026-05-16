@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { trpc } from '@/lib/trpc'
-import { Badge, Button, Card, Input, Modal, ModalBody, ModalFooter, Select, cn } from '@pms/ui'
+import { Badge, Button, Card, Icon, Input, Modal, ModalBody, ModalFooter, Select, cn } from '@pms/ui'
 import { PageHeader } from '@/components/PageHeader'
 
 type DocType = 'QUOTE' | 'INVOICE' | 'TAX_INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'ALL'
@@ -104,7 +104,7 @@ export default function AccountingPage() {
 
       {!isPending && data && data.length === 0 && (
         <Card className="flex flex-col items-center p-12 text-center">
-          <div className="mb-3 text-4xl">🧾</div>
+          <Icon name="invoice" className="mb-3 text-4xl text-gray-300" />
           <p className="text-sm text-gray-500">ยังไม่มีเอกสาร — กด &quot;+ เพิ่มเอกสาร&quot; เพื่อสร้างใหม่</p>
         </Card>
       )}
