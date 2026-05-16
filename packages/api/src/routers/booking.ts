@@ -87,6 +87,9 @@ export const bookingRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) => BookingService.confirmPending(input.id, ctx.ownerId)),
 
+  /** Manual auto-cancel trigger (any owner can run — affects only their bookings indirectly via paymentDueAt). */
+  runAutoCancel: ownerProcedure.mutation(() => BookingService.runAutoCancel()),
+
   list: ownerProcedure
     .input(
       z

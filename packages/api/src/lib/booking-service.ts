@@ -239,6 +239,37 @@ export const BookingService = {
     })
   },
 
+  /**
+   * Find every PENDING_PAYMENT booking whose paymentDueAt has passed,
+   * mark booking AUTO_CANCELLED, and release its calendar cells back to OPEN.
+   * Returns the count of bookings cancelled.
+   */
+  async runAutoCancel(): Promise<{ cancelled: number; ids: string[] }> {
+    const now = new Date()
+    const stale = await prisma.booking.findMany({
+      where: {
+        status: 'PENDING_PAYMENT',
+        paymentDueAt: { lte: now, not: null },
+        deletedAt: null,
+      },
+      select: { id: true },
+    })
+    if (stale.length === 0) return { cancelled: 0, ids: [] }
+
+    const ids = stale.map((b) => b.id)
+    await prisma.$transaction([
+      prisma.variantCalendar.updateMany({
+        where: { bookingId: { in: ids } },
+        data: { status: 'OPEN', bookingId: null, note: null },
+      }),
+      prisma.booking.updateMany({
+        where: { id: { in: ids } },
+        data: { status: 'AUTO_CANCELLED' as BookingStatus },
+      }),
+    ])
+    return { cancelled: ids.length, ids }
+  },
+
   async confirmPending(bookingId: string, ownerId: string) {
     return prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findFirst({
