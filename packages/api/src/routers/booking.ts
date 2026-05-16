@@ -90,6 +90,51 @@ export const bookingRouter = router({
   /** Manual auto-cancel trigger (any owner can run — affects only their bookings indirectly via paymentDueAt). */
   runAutoCancel: ownerProcedure.mutation(() => BookingService.runAutoCancel()),
 
+  postpone: ownerProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        newCheckin: isoDate,
+        newCheckout: isoDate,
+        reason: z.string().optional(),
+        expiresAt: z.string().optional(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      BookingService.postpone({
+        bookingId: input.id,
+        ownerId: ctx.ownerId,
+        newCheckin: input.newCheckin,
+        newCheckout: input.newCheckout,
+        reason: input.reason,
+        expiresAt: input.expiresAt,
+      }),
+    ),
+
+  postponeHistory: ownerProcedure
+    .input(z.object({ scope: z.enum(['ACTIVE', 'EXPIRED', 'ALL']).default('ALL') }).optional())
+    .query(({ ctx, input }) => {
+      const scope = input?.scope ?? 'ALL'
+      const now = new Date()
+      return prisma.bookingPostpone.findMany({
+        where: {
+          booking: { property: { ownerId: ctx.ownerId, deletedAt: null } },
+          ...(scope === 'ACTIVE' && { expiresAt: { gte: now } }),
+          ...(scope === 'EXPIRED' && { expiresAt: { lt: now } }),
+        },
+        orderBy: { postponedAt: 'desc' },
+        take: 100,
+        include: {
+          booking: {
+            include: {
+              property: { select: { code: true, name: true } },
+              variant: { select: { name: true, bedrooms: true } },
+            },
+          },
+        },
+      })
+    }),
+
   list: ownerProcedure
     .input(
       z

@@ -270,6 +270,98 @@ export const BookingService = {
     return { cancelled: ids.length, ids }
   },
 
+  async postpone(input: {
+    bookingId: string
+    ownerId: string
+    newCheckin: Date | string
+    newCheckout: Date | string
+    reason?: string
+    expiresAt?: Date | string
+  }) {
+    return prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findFirst({
+        where: { id: input.bookingId, property: { ownerId: input.ownerId, deletedAt: null } },
+      })
+      if (!booking) throw new TRPCError({ code: 'NOT_FOUND', message: 'ไม่พบการจอง' })
+      if (booking.status !== 'CONFIRMED' && booking.status !== 'PENDING_PAYMENT') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'เลื่อนได้เฉพาะ booking ที่ยืนยันแล้วหรือรอชำระ',
+        })
+      }
+
+      const newNights = nightDays(input.newCheckin, input.newCheckout)
+
+      // Check conflicts on NEW dates excluding this booking's own cells
+      const conflicts = await tx.variantCalendar.findMany({
+        where: {
+          variantId: booking.variantId,
+          date: { in: newNights },
+          status: { in: ['BOOKED', 'PENDING_PAYMENT', 'UNDER_MAINTENANCE'] },
+          NOT: { bookingId: input.bookingId },
+        },
+        select: { date: true },
+      })
+      if (conflicts.length) {
+        const d = conflicts[0]!.date.toISOString().slice(0, 10)
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: `วันใหม่ที่เลือก (${d}) มีการจองอื่นอยู่แล้ว`,
+        })
+      }
+
+      // Release old calendar cells (set OPEN + clear bookingId)
+      await tx.variantCalendar.updateMany({
+        where: { bookingId: input.bookingId },
+        data: { status: 'OPEN', bookingId: null, note: null },
+      })
+
+      // Reserve new calendar cells
+      const targetStatus = booking.status === 'CONFIRMED' ? 'BOOKED' : 'PENDING_PAYMENT'
+      for (const date of newNights) {
+        await tx.variantCalendar.upsert({
+          where: { variantId_date: { variantId: booking.variantId, date } },
+          update: {
+            status: targetStatus as CalendarStatus,
+            bookingId: input.bookingId,
+            note: booking.publicNote,
+          },
+          create: {
+            variantId: booking.variantId,
+            date,
+            status: targetStatus as CalendarStatus,
+            bookingId: input.bookingId,
+            note: booking.publicNote,
+          },
+        })
+      }
+
+      // Record history
+      await tx.bookingPostpone.create({
+        data: {
+          bookingId: input.bookingId,
+          oldCheckin: booking.checkin,
+          oldCheckout: booking.checkout,
+          newCheckin: toDateOnly(new Date(input.newCheckin)),
+          newCheckout: toDateOnly(new Date(input.newCheckout)),
+          reason: input.reason,
+          expiresAt: input.expiresAt
+            ? new Date(input.expiresAt)
+            : new Date(Date.now() + 30 * 86400000), // default 30 days from now
+        },
+      })
+
+      // Update booking
+      return tx.booking.update({
+        where: { id: input.bookingId },
+        data: {
+          checkin: toDateOnly(new Date(input.newCheckin)),
+          checkout: toDateOnly(new Date(input.newCheckout)),
+        },
+      })
+    })
+  },
+
   async confirmPending(bookingId: string, ownerId: string) {
     return prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findFirst({

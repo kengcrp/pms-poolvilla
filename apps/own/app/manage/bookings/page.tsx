@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { trpc } from '@/lib/trpc'
 import { Badge, Button, Card, Input, cn } from '@pms/ui'
 import { PageHeader } from '@/components/PageHeader'
+import { PostponeModal } from '@/components/PostponeModal'
 import { ymdLocal } from '@/lib/date'
 
 type StatusFilter =
@@ -60,6 +61,13 @@ function formatBahtFull(n: number) {
 export default function BookingsPage() {
   const [tab, setTab] = useState<StatusFilter>('ALL')
   const [search, setSearch] = useState('')
+  const [postponeFor, setPostponeFor] = useState<{
+    id: string
+    customerName: string
+    checkin: Date | string
+    checkout: Date | string
+    status: string
+  } | null>(null)
   const utils = trpc.useUtils()
 
   const { data, isPending } = trpc.booking.list.useQuery({
@@ -211,6 +219,23 @@ export default function BookingsPage() {
                   {(b.status === 'PENDING_PAYMENT' || b.status === 'CONFIRMED') && (
                     <Button
                       size="sm"
+                      variant="secondary"
+                      onClick={() =>
+                        setPostponeFor({
+                          id: b.id,
+                          customerName: b.customerName,
+                          checkin: b.checkin,
+                          checkout: b.checkout,
+                          status: b.status,
+                        })
+                      }
+                    >
+                      เลื่อนวัน
+                    </Button>
+                  )}
+                  {(b.status === 'PENDING_PAYMENT' || b.status === 'CONFIRMED') && (
+                    <Button
+                      size="sm"
                       variant="ghost"
                       onClick={() => {
                         if (confirm.isPending) return
@@ -240,6 +265,8 @@ export default function BookingsPage() {
           <div className="text-sm text-gray-500">กำลังโหลด...</div>
         </Card>
       )}
+
+      <PostponeModal open={!!postponeFor} onClose={() => setPostponeFor(null)} booking={postponeFor} />
     </div>
   )
 }
