@@ -27,6 +27,7 @@ interface CreateBookingBase extends DateRangeInput {
   total: number
   publicNote?: string
   internalNote?: string
+  couponId?: string
 }
 
 interface CreateConfirmedInput extends CreateBookingBase {
@@ -98,6 +99,21 @@ async function assertNoConflict(tx: Tx, variantId: string, nights: Date[]) {
   }
 }
 
+/** Atomically decrement coupon qtyLeft + verify ownership; returns coupon or throws. */
+async function consumeCoupon(tx: Tx, couponId: string, ownerId: string) {
+  const coupon = await tx.coupon.findFirst({ where: { id: couponId, ownerId } })
+  if (!coupon) throw new TRPCError({ code: 'NOT_FOUND', message: 'ไม่พบคูปอง' })
+  const now = new Date()
+  if (now < coupon.startsAt) throw new TRPCError({ code: 'BAD_REQUEST', message: 'คูปองยังไม่เริ่ม' })
+  if (now > coupon.expiresAt) throw new TRPCError({ code: 'BAD_REQUEST', message: 'คูปองหมดอายุ' })
+  const result = await tx.coupon.updateMany({
+    where: { id: couponId, qtyLeft: { gt: 0 } },
+    data: { qtyLeft: { decrement: 1 } },
+  })
+  if (result.count === 0) throw new TRPCError({ code: 'CONFLICT', message: 'คูปองหมดแล้ว' })
+  return coupon
+}
+
 async function syncCalendar(
   tx: Tx,
   variantId: string,
@@ -129,6 +145,7 @@ export const BookingService = {
       const v = await assertVariantOwn(tx, input.variantId, input.ownerId)
       const nights = nightDays(input.checkin, input.checkout)
       await assertNoConflict(tx, input.variantId, nights)
+      if (input.couponId) await consumeCoupon(tx, input.couponId, input.ownerId)
       const booking = await tx.booking.create({
         data: {
           variantId: input.variantId,
@@ -145,6 +162,7 @@ export const BookingService = {
           status: 'CONFIRMED' as BookingStatus,
           publicNote: input.publicNote,
           internalNote: input.internalNote,
+          couponId: input.couponId,
         },
       })
       await syncCalendar(tx, input.variantId, nights, 'BOOKED', booking.id, input.publicNote ?? null)
@@ -157,6 +175,7 @@ export const BookingService = {
       const v = await assertVariantOwn(tx, input.variantId, input.ownerId)
       const nights = nightDays(input.checkin, input.checkout)
       await assertNoConflict(tx, input.variantId, nights)
+      if (input.couponId) await consumeCoupon(tx, input.couponId, input.ownerId)
       const booking = await tx.booking.create({
         data: {
           variantId: input.variantId,
@@ -175,6 +194,7 @@ export const BookingService = {
           status: 'PENDING_PAYMENT' as BookingStatus,
           publicNote: input.publicNote,
           internalNote: input.internalNote,
+          couponId: input.couponId,
         },
       })
       await syncCalendar(tx, input.variantId, nights, 'PENDING_PAYMENT', booking.id, input.publicNote ?? null)
@@ -187,6 +207,7 @@ export const BookingService = {
       const v = await assertVariantOwn(tx, input.variantId, input.ownerId)
       const nights = nightDays(input.checkin, input.checkout)
       await assertNoConflict(tx, input.variantId, nights)
+      if (input.couponId) await consumeCoupon(tx, input.couponId, input.ownerId)
       const booking = await tx.booking.create({
         data: {
           variantId: input.variantId,
@@ -208,6 +229,7 @@ export const BookingService = {
           invoiceShowLogo: input.showLogo,
           invoiceIssued: true,
           invoiceIssuedAt: new Date(),
+          couponId: input.couponId,
         },
       })
       await syncCalendar(tx, input.variantId, nights, 'BOOKED', booking.id, input.publicNote ?? null)

@@ -8,6 +8,7 @@ import { bookingRouter } from './routers/booking'
 import { propertyExtrasRouter } from './routers/property-extras'
 import { publicRouter } from './routers/public'
 import { accountingRouter } from './routers/accounting'
+import { couponRouter } from './routers/coupon'
 
 export const appRouter = router({
   property: propertyRouter,
@@ -19,6 +20,7 @@ export const appRouter = router({
   propertyExtras: propertyExtrasRouter,
   public: publicRouter,
   accounting: accountingRouter,
+  coupon: couponRouter,
 })
 
 export type AppRouter = typeof appRouter

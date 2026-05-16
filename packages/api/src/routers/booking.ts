@@ -17,6 +17,7 @@ const baseInput = {
   total: z.number().nonnegative(),
   publicNote: z.string().optional(),
   internalNote: z.string().optional(),
+  couponId: z.string().optional(),
 }
 
 export const bookingRouter = router({

@@ -53,12 +53,15 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
     vat: false,
     showLogo: false,
     blockNote: '',
+    couponCode: '',
   })
+  const [appliedCoupon, setAppliedCoupon] = useState<{ id: string; discount: number; code: string } | null>(null)
 
   useEffect(() => {
     if (!open) return
     setError(null)
     setTab('quick')
+    setAppliedCoupon(null)
     setForm({
       checkin: dateStr,
       checkout: nextDayStr,
@@ -75,6 +78,7 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
       vat: false,
       showLogo: false,
       blockNote: '',
+      couponCode: '',
     })
   }, [open, dateStr, nextDayStr])
 
@@ -88,6 +92,32 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
     utils.booking.atDate.invalidate()
   }
 
+  const [validating, setValidating] = useState(false)
+  async function applyCoupon() {
+    setError(null)
+    if (!form.couponCode.trim()) return
+    if (!form.total || form.total <= 0) {
+      return setError('กรอกราคารวมก่อนใช้คูปอง')
+    }
+    setValidating(true)
+    try {
+      const res = await utils.coupon.validate.fetch({ code: form.couponCode, basePrice: form.total })
+      if (!res.ok) {
+        setAppliedCoupon(null)
+        return setError(res.reason ?? 'คูปองใช้ไม่ได้')
+      }
+      setAppliedCoupon({ id: res.coupon.id, discount: res.discount, code: res.coupon.code })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด')
+    } finally {
+      setValidating(false)
+    }
+  }
+  function clearCoupon() {
+    setAppliedCoupon(null)
+    setForm({ ...form, couponCode: '' })
+  }
+
   const createConfirmed = trpc.booking.createConfirmed.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(e.message) })
   const createPending = trpc.booking.createPending.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(e.message) })
   const createInvoice = trpc.booking.createInvoice.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(e.message) })
@@ -99,6 +129,7 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
     if (!variantId) return
     setError(null)
     if (!form.checkin || !form.checkout) return setError('กรุณาเลือกวันที่')
+    const finalTotal = appliedCoupon ? Math.max(0, form.total - appliedCoupon.discount) : form.total
     const base = {
       variantId,
       checkin: form.checkin,
@@ -107,9 +138,10 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
       customerPhone: form.customerPhone || undefined,
       bookerName: form.bookerName || form.customerName,
       guestCount: form.guestCount,
-      total: form.total,
+      total: finalTotal,
       publicNote: form.publicNote || undefined,
       internalNote: form.internalNote || undefined,
+      couponId: appliedCoupon?.id,
     }
     if (tab === 'block') {
       return blockDates.mutate({ variantId: variantId!, checkin: form.checkin, checkout: form.checkout, note: form.blockNote || undefined })
@@ -274,6 +306,46 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
                   <option value="MOBILE_BANKING">Mobile Banking</option>
                 </Select>
               </div>
+            </div>
+
+            <div className="mt-4">
+              <Label>คูปอง</Label>
+              {appliedCoupon ? (
+                <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="success" dot>
+                      {appliedCoupon.code}
+                    </Badge>
+                    <span className="text-sm text-emerald-800">
+                      ส่วนลด ฿{appliedCoupon.discount.toLocaleString()} · สุทธิ ฿{Math.max(0, form.total - appliedCoupon.discount).toLocaleString()}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={clearCoupon}
+                    className="text-xs text-emerald-700 hover:text-emerald-900"
+                  >
+                    ลบ
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    value={form.couponCode}
+                    onChange={(e) => setForm({ ...form, couponCode: e.target.value.toUpperCase() })}
+                    placeholder="กรอกรหัสคูปอง"
+                    className="font-mono"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={applyCoupon}
+                    disabled={!form.couponCode || validating}
+                  >
+                    {validating ? '...' : 'ใช้'}
+                  </Button>
+                </div>
+              )}
             </div>
 
             {(tab === 'pending' || tab === 'invoice') && (
