@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc'
+import { useRouter } from 'next/navigation'
 import { Badge, Button, Card, Input, cn } from '@pms/ui'
 import { PageHeader } from '@/components/PageHeader'
 import { PostponeModal } from '@/components/PostponeModal'
@@ -59,6 +60,7 @@ function formatBahtFull(n: number) {
 }
 
 export default function BookingsPage() {
+  const router = useRouter()
   const [tab, setTab] = useState<StatusFilter>('ALL')
   const [search, setSearch] = useState('')
   const [postponeFor, setPostponeFor] = useState<{
@@ -69,6 +71,9 @@ export default function BookingsPage() {
     status: string
   } | null>(null)
   const utils = trpc.useUtils()
+  const createInvoice = trpc.accounting.createFromBooking.useMutation({
+    onSuccess: (doc) => router.push(`/manage/accounting/${doc.id}`),
+  })
 
   const { data, isPending } = trpc.booking.list.useQuery({
     status: tab === 'ALL' ? undefined : tab,
@@ -246,6 +251,16 @@ export default function BookingsPage() {
                       className="text-red-600 hover:bg-red-50"
                     >
                       ยกเลิก
+                    </Button>
+                  )}
+                  {(b.status === 'CONFIRMED' || b.status === 'COMPLETED') && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => createInvoice.mutate({ bookingId: b.id, type: 'INVOICE', withVat: false })}
+                      disabled={createInvoice.isPending}
+                    >
+                      ออกใบจอง
                     </Button>
                   )}
                   <Link href={`/manage/calendar?focus=${b.variantId}`}>

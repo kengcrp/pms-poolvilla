@@ -111,3 +111,17 @@
     @apply disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-60;
   }
 }
+
+/* Print — strip everything except the doc body */
+@media print {
+  body {
+    background: white !important;
+  }
+  aside,
+  header {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+}
