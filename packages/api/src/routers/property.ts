@@ -94,12 +94,26 @@ export const propertyRouter = router({
   update: ownerProcedure.input(propertyUpdateSchema).mutation(async ({ ctx, input }) => {
     await assertOwn(input.id, ctx.ownerId)
     const { id, name, ...rest } = input
-    return prisma.property.update({
-      where: { id },
-      data: {
-        ...rest,
-        ...(name && { name: name as Prisma.InputJsonValue }),
-      },
+
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.property.update({
+        where: { id },
+        data: {
+          ...rest,
+          ...(name && { name: name as Prisma.InputJsonValue }),
+        },
+      })
+
+      // Keep default variant in sync with property totalBedrooms
+      // (default variant = "เปิดทั้งหลัง" — always reflects the whole property)
+      if (input.totalBedrooms !== undefined) {
+        await tx.propertyVariant.updateMany({
+          where: { propertyId: id, isDefault: true },
+          data: { bedrooms: input.totalBedrooms },
+        })
+      }
+
+      return updated
     })
   }),
 

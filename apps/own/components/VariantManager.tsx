@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { trpc } from '@/lib/trpc'
-import { Badge, Button, Input, Label } from '@pms/ui'
+import { Badge, Button, Icon, Input, Label } from '@pms/ui'
 
 interface Props {
   propertyId: string
@@ -40,28 +40,44 @@ export function VariantManager({ propertyId, totalBedrooms }: Props) {
       <div>
         <h4 className="text-sm font-semibold text-gray-900">รูปแบบการเปิดขาย (Variants)</h4>
         <p className="mt-0.5 text-xs text-gray-500">
-          เปิดทั้งหลังคือ default · เพิ่มแบบแบ่งห้องเพื่อให้ลูกค้าเลือกจองเฉพาะส่วน
+          <span className="font-medium">เปิดทั้งหลัง</span> = ห้องนอนเท่ากับทั้งหลัง (sync อัตโนมัติ)
+          · เพิ่ม <span className="font-medium">แบ่งห้อง</span> ให้ลูกค้าเลือกจองบางส่วน
         </p>
       </div>
 
       <div className="space-y-2">
         {variants.map((v) => {
           const name = (v.name as { th?: string })?.th ?? ''
+          const isDef = v.isDefault
+          // For default variant, always show property's totalBedrooms (source of truth)
+          const displayBedrooms = isDef ? totalBedrooms : v.bedrooms
           return (
             <div
               key={v.id}
               className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3 transition-colors hover:border-gray-300"
             >
               <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
-                <span className="text-sm font-semibold">{v.bedrooms}</span>
+                <span className="text-sm font-semibold">{displayBedrooms}</span>
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-medium text-gray-900">{name}</span>
-                  {v.isDefault && <Badge variant="brand">เปิดทั้งหลัง</Badge>}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="truncate font-medium text-gray-900">
+                    {isDef ? `เปิดทั้งหลัง (${totalBedrooms} ห้องนอน)` : name}
+                  </span>
+                  {isDef && <Badge variant="brand">default</Badge>}
                 </div>
-                <div className="mt-0.5 text-xs text-gray-500">
-                  🛏 {v.bedrooms} ห้องนอน · 👥 รองรับสูงสุด {v.maxGuests} ท่าน
+                <div className="mt-0.5 flex items-center gap-3 text-xs text-gray-500">
+                  <span className="inline-flex items-center gap-1">
+                    <Icon name="bed" className="size-3" /> {displayBedrooms} ห้องนอน
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Icon name="users" className="size-3" /> สูงสุด {v.maxGuests} ท่าน
+                  </span>
+                  {isDef && (
+                    <span className="text-[10.5px] text-gray-400">
+                      🔒 ห้องนอน sync กับ field ด้านบน
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -77,7 +93,7 @@ export function VariantManager({ propertyId, totalBedrooms }: Props) {
                   />
                   <span className="text-xs text-gray-400">คน</span>
                 </div>
-                {!v.isDefault && (
+                {!isDef && (
                   <Button
                     type="button"
                     variant="ghost"
@@ -86,8 +102,9 @@ export function VariantManager({ propertyId, totalBedrooms }: Props) {
                       if (confirm(`ลบ ${name}?`)) deleteVariant.mutate({ id: v.id })
                     }}
                     className="text-red-500 hover:bg-red-50 hover:text-red-600"
+                    title="ลบ variant"
                   >
-                    <svg className="size-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" /></svg>
+                    <Icon name="trash" className="size-3.5" />
                   </Button>
                 )}
               </div>
@@ -98,7 +115,7 @@ export function VariantManager({ propertyId, totalBedrooms }: Props) {
 
       <div className="rounded-xl border-2 border-dashed border-gray-300 bg-gray-50/50 p-4">
         <div className="mb-3 flex items-center gap-1.5 text-sm font-medium text-gray-700">
-          <svg className="size-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" /></svg>
+          <Icon name="plus" className="size-3.5" />
           เพิ่มแบบแบ่งห้อง
         </div>
         <div className="flex items-end gap-3">
@@ -108,7 +125,7 @@ export function VariantManager({ propertyId, totalBedrooms }: Props) {
               id="vBed"
               type="number"
               min={1}
-              max={totalBedrooms - 1}
+              max={Math.max(1, totalBedrooms - 1)}
               value={newVariant.bedrooms}
               onChange={(e) => setNewVariant({ ...newVariant, bedrooms: Number(e.target.value) })}
             />
@@ -127,6 +144,12 @@ export function VariantManager({ propertyId, totalBedrooms }: Props) {
             เพิ่ม
           </Button>
         </div>
+        {totalBedrooms <= 1 && (
+          <p className="mt-2 text-xs text-amber-700">
+            💡 ที่พักนี้มี {totalBedrooms} ห้องนอน — เพิ่ม variant ไม่ได้
+            (ต้องมี ≥ 2 ห้องนอนจึงจะแบ่งได้)
+          </p>
+        )}
       </div>
     </div>
   )
