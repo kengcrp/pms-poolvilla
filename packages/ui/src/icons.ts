@@ -47,6 +47,7 @@ import {
   faChevronRight,
   faAngleDown,
   faSpinner,
+  faBars,
 
   // Info / status
   faCircleInfo,
@@ -168,6 +169,7 @@ export const ICONS = {
   chevronRight: faChevronRight,
   caretDown: faAngleDown,
   spinner: faSpinner,
+  menu: faBars,
 
   // Info / status
   info: faCircleInfo,
