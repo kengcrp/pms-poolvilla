@@ -88,16 +88,20 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ slug:
     setAppliedCoupon(null)
     setForm((f) => ({ ...f, couponCode: '' }))
     const key = ymd(date)
+    // No range yet, OR range complete → start a new selection
     if (!range.from || (range.from && range.to)) {
       setRange({ from: key })
       setSubmitState(null)
-    } else if (key < range.from) {
-      setRange({ from: key })
-    } else {
-      const next = new Date(date)
-      next.setUTCDate(next.getUTCDate() + 1)
-      setRange({ from: range.from, to: ymd(next) })
+      return
     }
+    // 2nd click — interpret as checkout date
+    if (key <= range.from) {
+      // Clicked same day or earlier → restart selection
+      setRange({ from: key })
+      return
+    }
+    // checkout = the clicked date itself (Airbnb-style: stay = from .. to-1)
+    setRange({ from: range.from, to: key })
   }
 
   async function applyCoupon() {
