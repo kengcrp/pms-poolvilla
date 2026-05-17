@@ -3,16 +3,18 @@
 import { useMemo, useState } from 'react'
 import { trpc } from '@/lib/trpc'
 import { Icon, cn } from '@pms/ui'
-import { formatBaht, formatMonthLabel, THAI_DOW_SHORT, ymd } from '@/lib/date'
+import { formatMonthLabel, ymd } from '@/lib/date'
 
 interface Props {
   propertyId: string
   onCellClick?: (variantId: string, date: Date) => void
 }
 
+const DOW_FULL = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'] as const
+
 /**
- * Layout 2 — Days as rows, variants as columns.
- * Used in /manage/calendar when user picks "รูปแบบ 2".
+ * Layout 2 — Days as rows, variants (เหมาหลัง + แบ่งห้องนอน) as columns.
+ * Mirrors Runblook's "รูปแบบ 2".
  */
 export function PriceTableVertical({ propertyId, onCellClick }: Props) {
   const today = useMemo(() => {
@@ -20,6 +22,7 @@ export function PriceTableVertical({ propertyId, onCellClick }: Props) {
     return { year: d.getUTCFullYear(), month0: d.getUTCMonth() }
   }, [])
   const [view, setView] = useState(today)
+  const [priceMode, setPriceMode] = useState<'sell' | 'agent'>('sell')
 
   const from = new Date(Date.UTC(view.year, view.month0, 1))
   const to = new Date(Date.UTC(view.year, view.month0 + 1, 0))
@@ -57,138 +60,189 @@ export function PriceTableVertical({ propertyId, onCellClick }: Props) {
   const variants = data.variants
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2.5">
+    <div>
+      {/* ราคาขาย / ส่ง Agent toggle */}
+      <div className="mb-3 inline-flex rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
         <button
           type="button"
-          onClick={() => nav(-1)}
-          className="flex size-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-          aria-label="เดือนก่อน"
+          onClick={() => setPriceMode('sell')}
+          className={cn(
+            'rounded-lg px-4 py-1.5 text-sm font-semibold transition-all',
+            priceMode === 'sell'
+              ? 'bg-brand-50 text-brand-700'
+              : 'text-gray-500 hover:text-gray-700',
+          )}
         >
-          <Icon name="chevronLeft" className="size-3.5" />
+          ราคาขาย
         </button>
-        <div className="rounded-lg bg-gray-50 px-4 py-1 text-sm font-semibold text-gray-700">
-          {formatMonthLabel(view.year, view.month0)}
-        </div>
         <button
           type="button"
-          onClick={() => nav(1)}
-          className="flex size-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-          aria-label="เดือนถัดไป"
+          onClick={() => setPriceMode('agent')}
+          className={cn(
+            'rounded-lg px-4 py-1.5 text-sm font-semibold transition-all',
+            priceMode === 'agent'
+              ? 'bg-brand-50 text-brand-700'
+              : 'text-gray-500 hover:text-gray-700',
+          )}
+          title="ราคาสำหรับ Agent (ฟีเจอร์เต็มอยู่ใน roadmap)"
         >
-          <Icon name="chevronRight" className="size-3.5" />
+          ส่ง Agent
         </button>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="w-12 px-2 py-2 text-center text-xs font-semibold text-gray-500">#</th>
-              <th className="w-24 px-2 py-2 text-left text-xs font-semibold text-gray-500">วัน</th>
-              {variants.map((v) => {
-                const name = (v.variant.name as { th?: string })?.th ?? `${v.variant.bedrooms} นอน`
-                const isDefault = v.variant.isDefault
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                {/* Month navigator */}
+                <th colSpan={2} className="w-44 border-r border-gray-200 px-2 py-3">
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => nav(-1)}
+                      className="flex size-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"
+                      aria-label="เดือนก่อน"
+                    >
+                      <Icon name="chevronLeft" className="size-3.5" />
+                    </button>
+                    <span className="text-sm font-semibold text-gray-700">
+                      {formatMonthLabel(view.year, view.month0)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => nav(1)}
+                      className="flex size-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"
+                      aria-label="เดือนถัดไป"
+                    >
+                      <Icon name="chevronRight" className="size-3.5" />
+                    </button>
+                  </div>
+                </th>
+                {variants.map((v) => {
+                  const isDefault = v.variant.isDefault
+                  return (
+                    <th
+                      key={v.variant.id}
+                      className="border-l border-gray-200 px-3 py-3 text-center"
+                    >
+                      <div className="text-sm font-semibold text-red-600">
+                        {isDefault ? 'เหมาหลัง' : 'แบ่งห้องนอน'}
+                      </div>
+                      <div className="mt-1 text-[11px] font-normal text-gray-500">
+                        {v.variant.bedrooms} ห้องนอน, {v.variant.maxGuests} ท่าน
+                      </div>
+                    </th>
+                  )
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {days.map((d, i) => {
+                const key = ymd(d)
+                const isToday = key === todayKey
+                const dow = d.getUTCDay()
+                const isWeekend = dow === 0 || dow === 6
                 return (
-                  <th
-                    key={v.variant.id}
-                    className="px-2 py-2 text-center text-xs font-semibold text-red-600"
+                  <tr
+                    key={key}
+                    className={cn(
+                      'border-b border-gray-100 last:border-b-0',
+                      isToday && 'bg-brand-50/40',
+                    )}
                   >
-                    <div>{isDefault ? 'เหมาหลัง' : 'แบ่งห้องนอน'}</div>
-                    <div className="mt-0.5 text-[10.5px] font-normal text-gray-500">
-                      {!isDefault && `${v.variant.bedrooms} ห้องนอน, `}
-                      {v.variant.maxGuests} ท่าน
-                      {isDefault && `, ${v.variant.bedrooms} ห้องนอน`}
-                    </div>
-                    <div className="mt-0.5 truncate text-[10px] font-normal text-gray-400">{name}</div>
-                  </th>
-                )
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {days.map((d, i) => {
-              const key = ymd(d)
-              const isToday = key === todayKey
-              const dayNum = d.getUTCDate()
-              const dow = d.getUTCDay()
-              return (
-                <tr
-                  key={key}
-                  className={cn(
-                    'border-b border-gray-100 last:border-b-0',
-                    isToday && 'bg-brand-50/40',
-                  )}
-                >
-                  <td className="px-2 py-2 text-center text-xs text-gray-700">{i + 1}</td>
-                  <td className="px-2 py-2 text-xs text-gray-700">
-                    {THAI_DOW_FULL_SHORT[dow]} ({dayNum})
-                  </td>
-                  {variants.map((v) => {
-                    const day = v.days.find((x) => ymd(new Date(x.date)) === key)
-                    if (!day) {
-                      return <td key={v.variant.id} className="px-2 py-2 text-center text-xs text-gray-400">—</td>
-                    }
-                    const status = day.status
-                    const priceType = day.priceType
+                    <td
+                      className={cn(
+                        'w-12 border-r border-gray-200 px-2 py-2 text-center text-sm',
+                        isToday ? 'font-semibold text-brand-700' : 'text-gray-600',
+                      )}
+                    >
+                      {i + 1}
+                    </td>
+                    <td
+                      className={cn(
+                        'w-28 border-r border-gray-200 px-3 py-2 text-sm',
+                        isWeekend && 'font-medium',
+                        isToday ? 'text-brand-700' : 'text-gray-700',
+                      )}
+                    >
+                      {DOW_FULL[dow]}
+                    </td>
+                    {variants.map((v) => {
+                      const day = v.days.find((x) => ymd(new Date(x.date)) === key)
+                      if (!day) {
+                        return (
+                          <td
+                            key={v.variant.id}
+                            className="border-l border-gray-200 px-2 py-2 text-center text-xs text-gray-400"
+                          >
+                            —
+                          </td>
+                        )
+                      }
+                      const status = day.status
+                      const priceType = day.priceType
 
-                    if (status === 'BOOKED' || status === 'PENDING_PAYMENT' || status === 'UNDER_MAINTENANCE') {
-                      const bg =
-                        status === 'BOOKED'
-                          ? 'bg-red-500'
-                          : status === 'PENDING_PAYMENT'
-                            ? 'bg-amber-400'
-                            : 'bg-gray-400'
+                      if (
+                        status === 'BOOKED' ||
+                        status === 'PENDING_PAYMENT' ||
+                        status === 'UNDER_MAINTENANCE'
+                      ) {
+                        const bg =
+                          status === 'BOOKED'
+                            ? 'bg-red-500 hover:bg-red-600'
+                            : status === 'PENDING_PAYMENT'
+                              ? 'bg-amber-400 hover:bg-amber-500'
+                              : 'bg-gray-400 hover:bg-gray-500'
+                        const label = status === 'UNDER_MAINTENANCE' ? 'ปิดซ่อม' : ''
+                        return (
+                          <td key={v.variant.id} className="border-l border-gray-200 p-1.5">
+                            <button
+                              type="button"
+                              onClick={() => onCellClick?.(v.variant.id, new Date(day.date))}
+                              className={cn(
+                                'flex h-8 w-full items-center justify-center rounded-md text-xs font-medium text-white transition-colors',
+                                bg,
+                              )}
+                            >
+                              {label}
+                            </button>
+                          </td>
+                        )
+                      }
+
+                      const textColor =
+                        priceType === 'SPECIAL'
+                          ? 'text-blue-700 font-semibold'
+                          : priceType === 'DISCOUNT'
+                            ? 'text-emerald-700 font-semibold'
+                            : 'text-gray-700'
+
                       return (
-                        <td key={v.variant.id} className="p-1">
+                        <td
+                          key={v.variant.id}
+                          className="border-l border-gray-200 px-2 py-2 text-center"
+                        >
                           <button
                             type="button"
                             onClick={() => onCellClick?.(v.variant.id, new Date(day.date))}
                             className={cn(
-                              'flex h-7 w-full items-center justify-center rounded text-xs font-medium text-white transition-opacity hover:opacity-90',
-                              bg,
+                              'w-full rounded px-2 py-1 text-sm transition-colors hover:bg-gray-50',
+                              textColor,
                             )}
                           >
-                            {status === 'UNDER_MAINTENANCE' ? 'ปิด' : ''}
+                            ฿{day.price.toLocaleString()}
                           </button>
                         </td>
                       )
-                    }
-
-                    const textColor =
-                      priceType === 'SPECIAL'
-                        ? 'text-blue-700 font-medium'
-                        : priceType === 'DISCOUNT'
-                          ? 'text-emerald-700 font-medium'
-                          : 'text-gray-700'
-
-                    return (
-                      <td key={v.variant.id} className="px-2 py-2 text-center">
-                        <button
-                          type="button"
-                          onClick={() => onCellClick?.(v.variant.id, new Date(day.date))}
-                          className={cn(
-                            'rounded px-2 py-0.5 text-xs transition-colors hover:bg-gray-100',
-                            textColor,
-                          )}
-                        >
-                          ฿{day.price.toLocaleString()}
-                        </button>
-                      </td>
-                    )
-                  })}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+                    })}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )
 }
-
-// Full day-of-week labels for layout 2 row
-const THAI_DOW_FULL_SHORT = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์']
-// Avoid unused import warning
-void THAI_DOW_SHORT
-void formatBaht
