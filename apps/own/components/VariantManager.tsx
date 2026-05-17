@@ -96,12 +96,11 @@ export function VariantManager({ propertyId, totalBedrooms }: Props) {
                 {!isDef && (
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="danger"
                     size="icon"
                     onClick={() => {
                       if (confirm(`ลบ ${name}?`)) deleteVariant.mutate({ id: v.id })
                     }}
-                    className="text-red-500 hover:bg-red-50 hover:text-red-600"
                     title="ลบ variant"
                   >
                     <Icon name="trash" className="size-3.5" />

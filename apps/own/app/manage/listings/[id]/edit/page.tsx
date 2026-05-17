@@ -4,7 +4,7 @@ import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { trpc } from '@/lib/trpc'
-import { Badge, Button, Card, Input, Label, Select } from '@pms/ui'
+import { Badge, Button, Card, Icon, Input, Label, Select } from '@pms/ui'
 import { Section } from '@/components/Section'
 import { VariantManager } from '@/components/VariantManager'
 import { LocationSection } from '@/components/sections/LocationSection'
@@ -132,7 +132,8 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
             }}
             disabled={remove.isPending}
           >
-            ลบ
+            <Icon name="trash" className="size-3.5" />
+            ลบที่พัก
           </Button>
         </div>
       </div>
