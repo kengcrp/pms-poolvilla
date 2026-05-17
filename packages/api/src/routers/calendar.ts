@@ -25,4 +25,29 @@ export const calendarRouter = router({
       await assertVariantOwn(input.variantId, ctx.ownerId)
       return getCalendarRange(input.variantId, new Date(input.from), new Date(input.to))
     }),
+
+  /** Get calendar range for ALL variants of a property in one query. */
+  byProperty: ownerProcedure
+    .input(
+      z.object({
+        propertyId: z.string(),
+        from: z.string(),
+        to: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const property = await prisma.property.findFirst({
+        where: { id: input.propertyId, ownerId: ctx.ownerId, deletedAt: null },
+        include: { variants: { orderBy: { sortOrder: 'asc' } } },
+      })
+      if (!property) throw new TRPCError({ code: 'NOT_FOUND', message: 'ไม่พบที่พัก' })
+
+      const results = await Promise.all(
+        property.variants.map(async (v) => ({
+          variant: v,
+          days: await getCalendarRange(v.id, new Date(input.from), new Date(input.to)),
+        })),
+      )
+      return { property, variants: results }
+    }),
 })
