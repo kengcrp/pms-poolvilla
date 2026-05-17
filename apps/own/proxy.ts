@@ -8,8 +8,9 @@ export default auth((req) => {
   const isAuthPage = path.startsWith('/login')
   const isApiRoute = path.startsWith('/api')
   const isPublicSale = path.startsWith('/sale')
+  const isExplore = path.startsWith('/explore')
 
-  if (isApiRoute || isPublicSale) return NextResponse.next()
+  if (isApiRoute || isPublicSale || isExplore) return NextResponse.next()
 
   if (isAuthPage) {
     if (isLoggedIn) return NextResponse.redirect(new URL('/manage/dashboard', req.url))
