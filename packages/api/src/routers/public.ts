@@ -13,6 +13,80 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
  * NO auth required. Strictly filters: only ACTIVE + isActive properties.
  */
 export const publicRouter = router({
+  /** Master locations + zones for filter dropdowns (public). */
+  locations: publicProcedure.query(() =>
+    prisma.location.findMany({
+      orderBy: { name: 'asc' },
+      include: { zones: { orderBy: { name: 'asc' } } },
+    }),
+  ),
+
+  /** Global marketplace — all active properties from all owners with filters. */
+  exploreAll: publicProcedure
+    .input(
+      z.object({
+        search: z.string().optional(),
+        locationId: z.string().optional(),
+        zoneId: z.string().optional(),
+        minBed: z.number().int().min(0).optional(),
+        hasPool: z.boolean().optional(),
+        propertyType: z.enum(['POOL_VILLA', 'LOFT', 'BNB']).optional(),
+        sort: z.enum(['newest', 'bedroomDesc', 'bedroomAsc']).default('newest'),
+        limit: z.number().int().min(1).max(60).default(24),
+        offset: z.number().int().min(0).default(0),
+      }),
+    )
+    .query(async ({ input }) => {
+      const f = input
+      const search = f.search?.trim()
+
+      const where: Prisma.PropertyWhereInput = {
+        deletedAt: null,
+        isActive: true,
+        reviewStatus: 'ACTIVE',
+        owner: { saleSlug: { not: null } },
+        ...(f.locationId && { location: { locationId: f.locationId } }),
+        ...(f.zoneId && { location: { zoneId: f.zoneId } }),
+        ...(f.minBed && f.minBed > 0 && { totalBedrooms: { gte: f.minBed } }),
+        ...(f.propertyType && { type: f.propertyType }),
+        ...(f.hasPool && { pools: { some: {} } }),
+      }
+
+      let orderBy: Prisma.PropertyOrderByWithRelationInput = { createdAt: 'desc' }
+      if (f.sort === 'bedroomDesc') orderBy = { totalBedrooms: 'desc' }
+      else if (f.sort === 'bedroomAsc') orderBy = { totalBedrooms: 'asc' }
+
+      const limit = f.limit
+      const offset = f.offset
+
+      const [items, total] = await Promise.all([
+        prisma.property.findMany({
+          where,
+          orderBy,
+          take: limit,
+          skip: offset,
+          include: {
+            owner: { select: { id: true, name: true, saleSlug: true } },
+            location: { include: { location: true, zone: true } },
+            images: { where: { type: 'cover' }, take: 1 },
+            variants: { where: { isDefault: true }, take: 1 },
+            pools: { select: { id: true } },
+          },
+        }),
+        prisma.property.count({ where }),
+      ])
+
+      // Optional in-memory text filter (Prisma full-text on JSON `name` is heavy)
+      const filtered = search
+        ? items.filter((p) => {
+            const name = (p.name as { th?: string })?.th?.toLowerCase() ?? ''
+            return name.includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase())
+          })
+        : items
+
+      return { items: filtered, total, limit, offset }
+    }),
+
   /** Get owner + their active properties by sale slug. */
   ownerBySlug: publicProcedure
     .input(z.object({ slug: z.string().min(1) }))
