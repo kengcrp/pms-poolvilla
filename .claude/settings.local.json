@@ -19,7 +19,15 @@
       "mcp__Claude_in_Chrome__get_page_text",
       "Bash(curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh)",
       "Bash(bash)",
-      "Bash(git init *)"
+      "Bash(git init *)",
+      "Bash(DATABASE_URL=\"mysql://root:root@127.0.0.1:8889/pms_poolvilla\" pnpm exec prisma db push --accept-data-loss)",
+      "Bash(DATABASE_URL=\"mysql://root:root@127.0.0.1:8889/pms_poolvilla\" pnpm exec tsx prisma/seed.ts)",
+      "Bash(pnpm -r typecheck)",
+      "Bash(xargs kill -9)",
+      "Bash(pnpm dev *)",
+      "Bash(rm -f /tmp/m-cookies.txt)",
+      "Bash(curl -sS -c /tmp/m-cookies.txt http://localhost:3002/api/auth/csrf)",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

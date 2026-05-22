@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { prisma, type Prisma } from '@pms/db'
-import { router, ownerProcedure } from '../trpc'
+import { router, ownerProcedure, publicProcedure } from '../trpc'
 import { propertyCreateSchema, propertyUpdateSchema } from '../schemas/property'
 import { generatePropertyCode } from '../lib/code-gen'
 
@@ -15,6 +15,15 @@ async function assertOwn(propertyId: string, ownerId: string) {
 }
 
 export const propertyRouter = router({
+  /** List active property types (master data) — used by listing forms & explore filter */
+  types: publicProcedure.query(async () => {
+    return prisma.propertyTypeMaster.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { nameTh: 'asc' }],
+      select: { code: true, nameTh: true, nameEn: true, desc: true, iconRef: true },
+    })
+  }),
+
   list: ownerProcedure.query(async ({ ctx }) => {
     const [owner, properties] = await Promise.all([
       prisma.user.findUnique({

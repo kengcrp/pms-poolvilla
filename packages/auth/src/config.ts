@@ -33,6 +33,7 @@ export function buildAuthConfig(opts: { allowedRoles: UserRole[] }): NextAuthCon
           if (!parsed.success) return null
           const user = await prisma.user.findUnique({ where: { email: parsed.data.email } })
           if (!user || !user.passwordHash) return null
+          if (user.suspendedAt) return null
           if (!opts.allowedRoles.includes(user.role)) return null
           const ok = await compare(parsed.data.password, user.passwordHash)
           if (!ok) return null

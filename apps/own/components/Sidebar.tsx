@@ -3,41 +3,44 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn, Icon, type IconName } from '@pms/ui'
+import { useT } from '@/lib/i18n'
 
 interface MenuItem {
   href: string
-  label: string
+  /** i18n key for label (looked up via useT) */
+  labelKey: string
   icon: IconName
 }
 interface MenuGroup {
-  group: string
+  /** i18n key for group title */
+  groupKey: string
   items: MenuItem[]
 }
 
 const menu: MenuGroup[] = [
   {
-    group: 'จัดการข้อมูล',
+    groupKey: 'menu.group.manage',
     items: [
-      { href: '/manage/calendar', label: 'ปฏิทิน', icon: 'calendar' },
-      { href: '/manage/bookings', label: 'การจอง', icon: 'bookings' },
-      { href: '/manage/pricing', label: 'ปรับราคา', icon: 'money' },
-      { href: '/manage/listings', label: 'ลิสติ้งที่พัก', icon: 'home' },
-      { href: '/manage/postpone', label: 'เลื่อนวันเข้าพัก', icon: 'postpone' },
-      { href: '/manage/housekeeper', label: 'House Keeper', icon: 'broom' },
-      { href: '/manage/coupons', label: 'คูปอง', icon: 'ticket' },
-      { href: '/manage/accounting', label: 'ด้านบัญชี', icon: 'invoice' },
+      { href: '/manage/calendar', labelKey: 'menu.calendar', icon: 'calendar' },
+      { href: '/manage/pricing', labelKey: 'menu.pricing', icon: 'money' },
+      { href: '/manage/listings', labelKey: 'menu.listings', icon: 'home' },
+      { href: '/manage/postpone', labelKey: 'menu.postpone', icon: 'postpone' },
+      { href: '/manage/housekeeper', labelKey: 'menu.housekeeper', icon: 'broom' },
+      { href: '/manage/coupons', labelKey: 'menu.coupons', icon: 'ticket' },
+      { href: '/manage/accounting', labelKey: 'menu.accounting', icon: 'invoice' },
+      { href: '/manage/hotels', labelKey: 'menu.hotels', icon: 'bed' },
     ],
   },
   {
-    group: 'รายงาน',
+    groupKey: 'menu.group.reports',
     items: [
-      { href: '/manage/dashboard', label: 'แดชบอร์ด', icon: 'dashboard' },
-      { href: '/manage/transactions', label: 'ประวัติการทำรายการ', icon: 'history' },
+      { href: '/manage/dashboard', labelKey: 'menu.dashboard', icon: 'dashboard' },
+      { href: '/manage/transactions', labelKey: 'menu.transactions', icon: 'history' },
     ],
   },
   {
-    group: 'อื่นๆ',
-    items: [{ href: '/manage/payout-channels', label: 'ช่องทางรับเงิน', icon: 'bank' }],
+    groupKey: 'menu.group.other',
+    items: [{ href: '/manage/payout-channels', labelKey: 'menu.payoutChannels', icon: 'bank' }],
   },
 ]
 
@@ -48,6 +51,7 @@ interface SidebarProps {
 
 export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const pathname = usePathname()
+  const t = useT()
 
   return (
     <>
@@ -55,7 +59,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
       {mobileOpen && (
         <button
           type="button"
-          aria-label="ปิดเมนู"
+          aria-label={t('shell.closeMenu')}
           onClick={onClose}
           className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm lg:hidden"
         />
@@ -83,7 +87,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
             type="button"
             onClick={onClose}
             className="flex size-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 lg:hidden"
-            aria-label="ปิดเมนู"
+            aria-label={t('shell.closeMenu')}
           >
             <Icon name="close" className="size-4" />
           </button>
@@ -91,9 +95,9 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
 
         <nav className="overflow-y-auto px-3 py-4" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
           {menu.map((group) => (
-            <div key={group.group} className="mb-5 last:mb-0">
+            <div key={group.groupKey} className="mb-5 last:mb-0">
               <div className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                {group.group}
+                {t(group.groupKey)}
               </div>
               <ul className="space-y-0.5">
                 {group.items.map((item) => {
@@ -111,7 +115,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                         )}
                       >
                         <Icon name={item.icon} fixedWidth className="size-4 text-gray-500" />
-                        <span>{item.label}</span>
+                        <span>{t(item.labelKey)}</span>
                       </Link>
                     </li>
                   )

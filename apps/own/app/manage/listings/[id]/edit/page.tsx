@@ -4,7 +4,7 @@ import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { trpc } from '@/lib/trpc'
-import { Badge, Button, Card, Icon, Input, Label, Select } from '@pms/ui'
+import { Badge, Button, Card, Icon, Input, Label, Select, cn } from '@pms/ui'
 import { Section } from '@/components/Section'
 import { VariantManager } from '@/components/VariantManager'
 import { LocationSection } from '@/components/sections/LocationSection'
@@ -26,6 +26,7 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
   const utils = trpc.useUtils()
 
   const { data: property, isPending, error } = trpc.property.byId.useQuery({ id })
+  const { data: types } = trpc.property.types.useQuery()
   const update = trpc.property.update.useMutation({
     onSuccess: () => utils.property.byId.invalidate({ id }),
   })
@@ -79,7 +80,7 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
       await update.mutateAsync({
         id,
         name: { th: form.nameTh },
-        type: form.type as 'POOL_VILLA' | 'LOFT' | 'BNB',
+        type: form.type,
         totalBedrooms: form.totalBedrooms,
         totalBathrooms: form.totalBathrooms,
         areaSqwa: form.areaSqwa ? Number(form.areaSqwa) : null,
@@ -140,95 +141,168 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
 
       <div className="space-y-3">
         <Section num={1} title="ข้อมูลที่พัก" description="ข้อมูลเบื้องต้น + รูปแบบการเปิดขาย" defaultOpen>
-          <div className="space-y-5">
+          <div className="space-y-7">
+            {/* ── Sub-group: ข้อมูลพื้นฐาน ─────────────────────────────── */}
             <div>
-              <Label required htmlFor="nameTh">
-                ชื่อที่พัก (ภาษาไทย)
-              </Label>
-              <Input
-                id="nameTh"
-                value={form.nameTh}
-                onChange={(e) => setForm({ ...form, nameTh: e.target.value })}
-                required
-              />
+              <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                ข้อมูลพื้นฐาน
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <Label required htmlFor="nameTh">ชื่อที่พัก (ภาษาไทย)</Label>
+                  <Input
+                    id="nameTh"
+                    value={form.nameTh}
+                    onChange={(e) => setForm({ ...form, nameTh: e.target.value })}
+                    placeholder="เช่น Harry Home 1, พูลวิลล่าเขาใหญ่"
+                    required
+                  />
+                  <p className="mt-1 text-[11px] text-gray-500">ชื่อที่จะแสดงให้ลูกค้าและในใบจอง</p>
+                </div>
+
+                <div>
+                  <Label htmlFor="type">ประเภทที่พัก</Label>
+                  <Select
+                    id="type"
+                    value={form.type}
+                    onChange={(e) => setForm({ ...form, type: e.target.value })}
+                  >
+                    {types?.map((t) => (
+                      <option key={t.code} value={t.code}>
+                        {t.nameTh}
+                      </option>
+                    ))}
+                    {form.type && !types?.some((t) => t.code === form.type) && (
+                      <option value={form.type}>{form.type} (ปิดใช้แล้ว)</option>
+                    )}
+                  </Select>
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="type">ประเภทที่พัก</Label>
-                <Select
-                  id="type"
-                  value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value })}
-                >
-                  <option value="POOL_VILLA">พูลวิลล่า</option>
-                  <option value="LOFT">ลอฟ</option>
-                  <option value="BNB">B&B</option>
-                </Select>
+            {/* ── Sub-group: ขนาด & จำนวน ──────────────────────────── */}
+            <div>
+              <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                ขนาดและจำนวน
               </div>
-              <div>
-                <Label htmlFor="areaSqwa">พื้นที่ใช้สอย (ตารางวา)</Label>
-                <Input
-                  id="areaSqwa"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={form.areaSqwa}
-                  onChange={(e) => setForm({ ...form, areaSqwa: e.target.value })}
-                />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <Label required htmlFor="totalBedrooms">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Icon name="bed" className="size-3.5 text-gray-400" />
+                      ห้องนอน
+                    </span>
+                  </Label>
+                  <Input
+                    id="totalBedrooms"
+                    type="number"
+                    min={1}
+                    value={form.totalBedrooms}
+                    onChange={(e) => setForm({ ...form, totalBedrooms: Number(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label required htmlFor="totalBathrooms">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Icon name="bath" className="size-3.5 text-gray-400" />
+                      ห้องน้ำ
+                    </span>
+                  </Label>
+                  <Input
+                    id="totalBathrooms"
+                    type="number"
+                    min={1}
+                    value={form.totalBathrooms}
+                    onChange={(e) => setForm({ ...form, totalBathrooms: Number(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="areaSqwa">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Icon name="area" className="size-3.5 text-gray-400" />
+                      พื้นที่ (ตร.วา)
+                    </span>
+                  </Label>
+                  <Input
+                    id="areaSqwa"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={form.areaSqwa}
+                    onChange={(e) => setForm({ ...form, areaSqwa: e.target.value })}
+                    placeholder="ไม่บังคับ"
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            {/* ── Sub-group: การติดต่อ ─────────────────────────────── */}
+            <div>
+              <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                การติดต่อ
+              </div>
               <div>
-                <Label required htmlFor="totalBedrooms">
-                  จำนวนห้องนอน
+                <Label htmlFor="contactInfo">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Icon name="phone" className="size-3.5 text-gray-400" />
+                    ข้อมูลติดต่อ/เช็คอิน
+                  </span>
                 </Label>
                 <Input
-                  id="totalBedrooms"
-                  type="number"
-                  min={1}
-                  value={form.totalBedrooms}
-                  onChange={(e) => setForm({ ...form, totalBedrooms: Number(e.target.value) })}
+                  id="contactInfo"
+                  value={form.contactInfo}
+                  onChange={(e) => setForm({ ...form, contactInfo: e.target.value })}
+                  placeholder="เช่น สมชาย 0987654321"
                 />
-              </div>
-              <div>
-                <Label required htmlFor="totalBathrooms">
-                  จำนวนห้องน้ำ
-                </Label>
-                <Input
-                  id="totalBathrooms"
-                  type="number"
-                  min={1}
-                  value={form.totalBathrooms}
-                  onChange={(e) => setForm({ ...form, totalBathrooms: Number(e.target.value) })}
-                />
+                <p className="mt-1 text-[11px] text-gray-500">
+                  ลูกค้าจะเห็นข้อมูลนี้หลังจองสำเร็จ
+                </p>
               </div>
             </div>
 
+            {/* ── Sub-group: ตัวเลือกเสริม (Partner listing) ──────── */}
             <div>
-              <Label htmlFor="contactInfo">ข้อมูลติดต่อ/เช็คอิน</Label>
-              <Input
-                id="contactInfo"
-                value={form.contactInfo}
-                onChange={(e) => setForm({ ...form, contactInfo: e.target.value })}
-                placeholder="ชื่อ, เบอร์โทร — เช่น สมชาย, 0987654321"
-              />
+              <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                ตัวเลือกเสริม
+              </div>
+              <label
+                className={cn(
+                  'flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-all',
+                  form.partnerListing
+                    ? 'border-brand-300 bg-brand-50/50 ring-1 ring-inset ring-brand-200'
+                    : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50',
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.partnerListing}
+                  onChange={(e) => setForm({ ...form, partnerListing: e.target.checked })}
+                  className="mt-0.5 size-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <Icon name="users" className="size-4 text-brand-600" />
+                    <span className="text-sm font-semibold text-gray-900">
+                      ต้องการลงประกาศกับพาทเนอร์ / Agent
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-gray-600">
+                    เปิดใช้งานเพื่อให้แสดงตัวเลือก <strong>"ราคาส่ง Agent"</strong> ในหน้า{' '}
+                    <strong>ปรับราคา</strong> และ <strong>ปฏิทิน</strong> —
+                    ช่วยให้คุณตั้งราคาแยกสำหรับการขายผ่านพาทเนอร์ (OTA / Agent)
+                  </p>
+                </div>
+              </label>
             </div>
-
-            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2.5 transition-colors hover:bg-gray-50">
-              <input
-                type="checkbox"
-                checked={form.partnerListing}
-                onChange={(e) => setForm({ ...form, partnerListing: e.target.checked })}
-                className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-              />
-              <span className="text-sm text-gray-700">ต้องการลงประกาศกับพาทเนอร์</span>
-            </label>
 
             <div className="flex items-center justify-between border-t border-gray-100 pt-4">
               <div className="text-xs text-gray-500">
-                {savedAt && `บันทึกล่าสุด ${savedAt.toLocaleTimeString('th-TH')}`}
+                {savedAt && (
+                  <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                    <Icon name="success" className="size-3.5" />
+                    บันทึกล่าสุด {savedAt.toLocaleTimeString('th-TH')}
+                  </span>
+                )}
               </div>
               <Button onClick={saveSection1} disabled={saving}>
                 {saving ? 'กำลังบันทึก...' : 'บันทึกข้อมูลที่พัก'}

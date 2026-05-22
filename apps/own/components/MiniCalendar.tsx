@@ -2,21 +2,40 @@
 
 import { useMemo, useState } from 'react'
 import { trpc } from '@/lib/trpc'
-import { buildMonthGrid, formatBaht, formatMonthLabel, THAI_DOW_SHORT, ymd } from '@/lib/date'
-import { cn } from '@pms/ui'
+import { buildMonthGrid, THAI_DOW_SHORT, THAI_MONTHS, ymd } from '@/lib/date'
+import { Icon, cn } from '@pms/ui'
 
 interface Props {
   variantId: string
   onCellClick?: (date: Date) => void
-  showPrice?: boolean
+  /** Show the selling_price / send_agent toggle above the calendar (default true) */
+  showPriceModeToggle?: boolean
+  /** Property-level booking window — dates beyond `today + N months` get a
+   *  "ยังไม่เปิดจอง" treatment (grayed out, no price, click disabled). null = no cap. */
+  bookingWindowMonths?: number | null
+  /** When true (default false = the "เหมาหลัง" variant), per-day Lock toggles
+   *  in the weekly modal hide the price on that day for this variant. */
+  isSplitVariant?: boolean
 }
 
-export function MiniCalendar({ variantId, onCellClick, showPrice = true }: Props) {
+/**
+ * Calendar grid — Runblook-style cells.
+ * Multi-night BOOKED strips overlay across consecutive cells using absolute
+ * positioning, so every day still shows its own date number underneath.
+ */
+export function MiniCalendar({
+  variantId,
+  onCellClick,
+  showPriceModeToggle = true,
+  bookingWindowMonths = null,
+  isSplitVariant = false,
+}: Props) {
   const today = useMemo(() => {
     const d = new Date()
     return { year: d.getUTCFullYear(), month0: d.getUTCMonth() }
   }, [])
   const [view, setView] = useState(today)
+  const [priceMode, setPriceMode] = useState<'sell' | 'agent'>('sell')
 
   const grid = useMemo(() => buildMonthGrid(view.year, view.month0), [view])
   const from = grid[0]!.date
@@ -28,11 +47,167 @@ export function MiniCalendar({ variantId, onCellClick, showPrice = true }: Props
     to: ymd(to),
   })
 
+  /**
+   * Enrich each API day with "effective" status/bookingId/customerName so the strip
+   * plan + render code treats sibling-locked days the same as the cell's own bookings.
+   * - Own status takes priority (a cell's own BOOKED beats a sibling lock)
+   * - Otherwise, if locked by sibling, surface the sibling's booking info
+   */
   const dayMap = useMemo(() => {
-    const m = new Map<string, NonNullable<typeof data>[number]>()
-    if (data) for (const d of data) m.set(ymd(new Date(d.date)), d)
+    type ApiDay = NonNullable<typeof data>[number]
+    type Enriched = ApiDay & {
+      effectiveStatus: ApiDay['status']
+      effectiveBookingId: string | null
+      effectiveCustomerName: string | null
+      effectiveNote: string | null
+      fromSibling: boolean
+    }
+    const m = new Map<string, Enriched>()
+    if (data) {
+      for (const d of data) {
+        const fromSibling = d.status === 'OPEN' && d.lockedBySibling
+        m.set(ymd(new Date(d.date)), {
+          ...d,
+          effectiveStatus: fromSibling ? (d.siblingStatus ?? d.status) : d.status,
+          effectiveBookingId: fromSibling ? d.siblingBookingId : d.bookingId,
+          effectiveCustomerName: fromSibling ? d.siblingCustomerName : d.customerName,
+          effectiveNote: fromSibling ? d.siblingNote : d.note,
+          fromSibling,
+        })
+      }
+    }
     return m
   }, [data])
+
+  // ── Build cell plan ──
+  // 'single' = render cell normally (with pill if BOOKED single-day)
+  // 'first'  = first cell of a multi-day BOOKED strip — render absolute strip overlay
+  // 'continuation' = middle/last cell of a strip — date only, pill hidden (overlay covers it)
+  const plan = useMemo(() => {
+    type StripStatus = 'BOOKED' | 'PENDING_PAYMENT' | 'UNDER_MAINTENANCE'
+    type Entry =
+      | { kind: 'single' }
+      | {
+          kind: 'first'
+          stripLen: number
+          extend: boolean
+          status: StripStatus
+          /** Strip wraps in from previous row's Saturday → square left edge, bleed past left */
+          continuesFromPrevRow: boolean
+          /** Strip continues into next row from Saturday → square right edge, bleed past right */
+          continuesToNextRow: boolean
+        }
+      | { kind: 'continuation' }
+    const result: Entry[] = new Array(grid.length).fill({ kind: 'single' as const })
+
+    const isStripStatus = (s?: string): s is StripStatus =>
+      s === 'BOOKED' || s === 'PENDING_PAYMENT' || s === 'UNDER_MAINTENANCE'
+
+    // Match if same effective status AND (for BOOKED/PENDING) same effective bookingId.
+    // MAINTENANCE matches by status alone (no bookingId). Also requires both cells be
+    // either both "own" or both "sibling-locked" so we don't merge them visually.
+    const matches = (
+      a: { effectiveStatus: string; effectiveBookingId: string | null; fromSibling: boolean },
+      b: { effectiveStatus: string; effectiveBookingId: string | null; fromSibling: boolean },
+    ) => {
+      if (a.effectiveStatus !== b.effectiveStatus) return false
+      if (a.fromSibling !== b.fromSibling) return false
+      if (a.effectiveStatus === 'UNDER_MAINTENANCE') return true
+      return !!a.effectiveBookingId && a.effectiveBookingId === b.effectiveBookingId
+    }
+
+    for (let i = 0; i < grid.length; i++) {
+      const cell = grid[i]!
+      const day = dayMap.get(ymd(cell.date))
+      if (!day || !isStripStatus(day.effectiveStatus) || !cell.inMonth) continue
+      // BOOKED/PENDING need a bookingId to group; MAINTENANCE doesn't
+      if (day.effectiveStatus !== 'UNDER_MAINTENANCE' && !day.effectiveBookingId) continue
+
+      const col = i % 7
+      const prevSameRowCell = col > 0 ? grid[i - 1] : null
+      const prevSameRowDay = prevSameRowCell ? dayMap.get(ymd(prevSameRowCell.date)) : null
+      const isSameAsPrevSameRow =
+        !!prevSameRowCell && prevSameRowCell.inMonth && !!prevSameRowDay && matches(day, prevSameRowDay)
+      if (isSameAsPrevSameRow) continue
+
+      let continuesFromPrevRow = false
+      if (col === 0 && i >= 7) {
+        const prevRowSatCell = grid[i - 1]!
+        const prevRowSatDay = dayMap.get(ymd(prevRowSatCell.date))
+        if (prevRowSatCell.inMonth && prevRowSatDay && matches(day, prevRowSatDay)) {
+          continuesFromPrevRow = true
+        }
+      }
+
+      let len = 1
+      while (col + len < 7 && i + len < grid.length) {
+        const nextCell = grid[i + len]!
+        if (!nextCell.inMonth) break
+        const nextDay = dayMap.get(ymd(nextCell.date))
+        if (!nextDay || !matches(day, nextDay)) break
+        len++
+      }
+
+      const lastCol = col + len - 1
+      const isLastColSat = lastCol === 6
+      const nextRowSunIdx = i + len
+      const nextRowSunCell = isLastColSat && nextRowSunIdx < grid.length ? grid[nextRowSunIdx] : null
+      const nextRowSunDay = nextRowSunCell ? dayMap.get(ymd(nextRowSunCell.date)) : null
+      const continuesToNextRow =
+        isLastColSat && !!nextRowSunCell && nextRowSunCell.inMonth && !!nextRowSunDay && matches(day, nextRowSunDay)
+
+      const cellAfterIdx = i + len
+      const cellAfter = col + len < 7 && cellAfterIdx < grid.length ? grid[cellAfterIdx] : null
+      const dayAfter = cellAfter ? dayMap.get(ymd(cellAfter.date)) : null
+      const nextIsAnotherStrip =
+        !!cellAfter && cellAfter.inMonth && !!dayAfter && isStripStatus(dayAfter.effectiveStatus)
+      const extend = !nextIsAnotherStrip
+
+      result[i] = {
+        kind: 'first',
+        stripLen: len,
+        extend,
+        status: day.effectiveStatus as StripStatus,
+        continuesFromPrevRow,
+        continuesToNextRow,
+      }
+      for (let j = 1; j < len; j++) result[i + j] = { kind: 'continuation' }
+    }
+    return result
+  }, [grid, dayMap])
+
+  /**
+   * Wrap-checkout indicators: when a booking ends on Saturday (last cell of a row)
+   * and its checkout day falls on next row's Sunday, show a small leftward tab on
+   * that Sunday cell. Same color as the booking — visual cue that the strip "wraps".
+   */
+  const wrapCheckoutMap = useMemo(() => {
+    type StripStatus = 'BOOKED' | 'PENDING_PAYMENT' | 'UNDER_MAINTENANCE'
+    const isStripStatus = (s?: string): s is StripStatus =>
+      s === 'BOOKED' || s === 'PENDING_PAYMENT' || s === 'UNDER_MAINTENANCE'
+    const map = new Map<number, StripStatus>()
+    for (let i = 0; i < grid.length; i++) {
+      const col = i % 7
+      if (col !== 0 || i === 0) continue
+      const prevCell = grid[i - 1]!
+      const prevDay = dayMap.get(ymd(prevCell.date))
+      if (!prevCell.inMonth || !prevDay || !isStripStatus(prevDay.effectiveStatus)) continue
+      const cell = grid[i]!
+      const day = dayMap.get(ymd(cell.date))
+      const isSameBooking =
+        !!day &&
+        day.effectiveStatus === prevDay.effectiveStatus &&
+        day.fromSibling === prevDay.fromSibling &&
+        (prevDay.effectiveStatus === 'UNDER_MAINTENANCE' ||
+          (!!prevDay.effectiveBookingId && day.effectiveBookingId === prevDay.effectiveBookingId))
+      if (isSameBooking) continue
+      if (day && isStripStatus(day.effectiveStatus)) {
+        continue
+      }
+      map.set(i, prevDay.effectiveStatus as StripStatus)
+    }
+    return map
+  }, [grid, dayMap])
 
   function nav(deltaMonth: number) {
     setView((v) => {
@@ -44,96 +219,314 @@ export function MiniCalendar({ variantId, onCellClick, showPrice = true }: Props
   }
 
   const todayKey = ymd(new Date())
+  // Maximum bookable date (UTC midnight). null = no cap (system default).
+  const maxBookableDate = useMemo(() => {
+    if (bookingWindowMonths == null) return null
+    const d = new Date()
+    d.setUTCMonth(d.getUTCMonth() + bookingWindowMonths)
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+  }, [bookingWindowMonths])
 
   return (
     <div className="w-full">
+      {/* selling_price / send_agent toggle */}
+      {showPriceModeToggle && (
+        <div className="mb-3 inline-flex w-full rounded-full bg-gray-100 p-1 shadow-inner">
+          <button
+            type="button"
+            onClick={() => setPriceMode('sell')}
+            className={cn(
+              'flex-1 rounded-full px-4 py-1.5 text-xs font-semibold transition-all',
+              priceMode === 'sell'
+                ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/30'
+                : 'text-gray-500 hover:text-gray-700',
+            )}
+          >
+            ราคาขาย
+          </button>
+          <button
+            type="button"
+            onClick={() => setPriceMode('agent')}
+            className={cn(
+              'flex-1 rounded-full px-4 py-1.5 text-xs font-semibold transition-all',
+              priceMode === 'agent'
+                ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/30'
+                : 'text-gray-500 hover:text-gray-700',
+            )}
+            title="ราคาสำหรับ Agent (ฟีเจอร์เต็มอยู่ใน roadmap)"
+          >
+            ราคาส่ง
+          </button>
+        </div>
+      )}
+
+      {/* Month nav */}
       <div className="mb-2 flex items-center justify-between">
         <button
           type="button"
           onClick={() => nav(-1)}
-          className="flex size-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          className="flex size-8 items-center justify-center rounded-full bg-white text-gray-500 ring-1 ring-gray-200 transition-colors hover:bg-gray-50 hover:text-gray-700"
           aria-label="เดือนก่อน"
         >
-          <svg className="size-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" /></svg>
+          <Icon name="chevronLeft" className="size-3.5" />
         </button>
-        <div className="text-sm font-semibold text-gray-900">{formatMonthLabel(view.year, view.month0)}</div>
+        <div className="text-sm font-bold text-gray-900">
+          {THAI_MONTHS[view.month0]} {view.year + 543}
+        </div>
         <button
           type="button"
           onClick={() => nav(1)}
-          className="flex size-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          className="flex size-8 items-center justify-center rounded-full bg-white text-gray-500 ring-1 ring-gray-200 transition-colors hover:bg-gray-50 hover:text-gray-700"
           aria-label="เดือนถัดไป"
         >
-          <svg className="size-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" /></svg>
+          <Icon name="chevronRight" className="size-3.5" />
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-xs">
-        {THAI_DOW_SHORT.map((d) => (
-          <div key={d} className="py-1 font-medium text-gray-400">
-            {d}
-          </div>
-        ))}
-        {grid.map((cell, i) => {
-          const key = ymd(cell.date)
-          const dayData = dayMap.get(key)
-          const status = dayData?.status ?? 'OPEN'
-          const priceType = dayData?.priceType
-          const price = dayData?.price ?? 0
-          const clickable = !!onCellClick && cell.inMonth
-          const isToday = key === todayKey && cell.inMonth
-
-          const variantClasses =
-            status === 'BOOKED'
-              ? 'bg-red-50 border-red-200 text-red-700'
-              : status === 'PENDING_PAYMENT'
-                ? 'bg-amber-50 border-amber-200 text-amber-700'
-                : status === 'UNDER_MAINTENANCE'
-                  ? 'bg-gray-100 border-gray-300 text-gray-500'
-                  : priceType === 'SPECIAL'
-                    ? 'bg-blue-50 border-blue-200 text-blue-700'
-                    : priceType === 'DISCOUNT'
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                      : 'bg-white border-gray-100 text-gray-700'
-
-          const content = (
+      {/* Calendar table — table-like layout with bordered cells */}
+      <div className="overflow-hidden rounded-xl border border-gray-200">
+        {/* DOW headers */}
+        <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
+          {THAI_DOW_SHORT.map((d) => (
             <div
-              className={cn(
-                'flex h-full flex-col items-center justify-center gap-0.5 rounded-md border px-1 py-1.5 transition-all',
-                variantClasses,
-                !cell.inMonth && 'opacity-30 grayscale',
-                isToday && 'ring-2 ring-brand-500 ring-offset-1',
-              )}
+              key={d}
+              className="border-r border-gray-200 py-2 text-center text-[11px] font-semibold text-gray-600 last:border-r-0"
             >
-              <div className={cn('text-[11px] font-semibold leading-none', !cell.inMonth && 'text-gray-300')}>
-                {cell.dayNum}
-              </div>
-              {showPrice && cell.inMonth && (
-                <div className="text-[9.5px] font-medium leading-none">
-                  {status === 'UNDER_MAINTENANCE' ? 'ปิด' : formatBaht(price)}
-                </div>
-              )}
+              {d}
             </div>
-          )
+          ))}
+        </div>
 
-          if (!clickable) {
-            return (
-              <div key={i} className="aspect-square">
-                {content}
+        {/* Date cells */}
+        <div className="grid grid-cols-7">
+          {grid.map((cell, i) => {
+            const planEntry = plan[i]!
+
+            const key = ymd(cell.date)
+            const dayData = dayMap.get(key)
+            const status = dayData?.status ?? 'OPEN'
+            const effectiveStatus = dayData?.effectiveStatus ?? 'OPEN'
+            const priceType = dayData?.priceType
+            const rawPrice = priceMode === 'agent' ? dayData?.agentPrice : dayData?.price
+            // Coerce NaN/undefined → null so we never render "฿NaN"
+            const safePrice =
+              typeof rawPrice === 'number' && Number.isFinite(rawPrice) ? rawPrice : null
+            // Split variant + weekly Lock for this DOW → hide price (any mode)
+            const splitLocked = isSplitVariant && dayData?.splitOpen === false
+            const price = safePrice ?? 0
+            // Show lock icon when: split-locked OR agent mode w/o agent price
+            const showLockIcon =
+              splitLocked || (priceMode === 'agent' && safePrice === null)
+            const fromSibling = dayData?.fromSibling ?? false
+            // Beyond booking window — date is past the property's "open booking" range
+            const beyondWindow =
+              !!maxBookableDate && cell.inMonth && cell.date.getTime() > maxBookableDate.getTime()
+            const clickable = !!onCellClick && cell.inMonth && !beyondWindow
+            const isToday = key === todayKey && cell.inMonth
+
+            const isLastCol = (i % 7) === 6
+            const isLastRow = i >= grid.length - 7
+
+            const cellBg =
+              beyondWindow
+                ? 'bg-gray-50'
+                : effectiveStatus === 'UNDER_MAINTENANCE' && !fromSibling
+                  ? 'bg-gray-200'
+                  : 'bg-white'
+
+            const numberColor = !cell.inMonth
+              ? 'text-gray-300'
+              : beyondWindow
+                ? 'text-gray-300'
+                : effectiveStatus === 'UNDER_MAINTENANCE' && !fromSibling
+                  ? 'text-gray-500'
+                  : 'text-gray-900'
+
+            const isDiscount = priceType === 'DISCOUNT'
+            const isSpecial = priceType === 'SPECIAL'
+
+            // For 'continuation' cells: render date number but NO pill (overlay covers it).
+            // For 'first' cells: render date number + price/pill area is replaced by the overlay strip.
+            // For 'single' cells: render normally.
+            const isContinuation = planEntry.kind === 'continuation'
+            const isStripFirst = planEntry.kind === 'first'
+
+            // Wrap-checkout indicator: small leftward tab on Sunday cells whose previous
+            // row's Saturday was the end of a booking strip (visual "wrap" cue).
+            const wrapStatus = wrapCheckoutMap.get(i)
+
+            const cellInner = (
+              <div className="flex h-full flex-col items-start justify-between px-2 pb-2 pt-2.5">
+                <div
+                  className={cn(
+                    'flex size-7 shrink-0 items-center justify-center self-center rounded-full text-[13px] font-semibold leading-none',
+                    numberColor,
+                    // Use bg-only highlight (no ring) so the circle's visual size
+                    // stays identical to every other cell.
+                    isToday && 'bg-brand-100 text-brand-700',
+                  )}
+                >
+                  {cell.dayNum}
+                </div>
+
+                <div className="w-full text-left">
+                  {isContinuation || isStripFirst ? null /* strip overlay drawn separately */
+                    : beyondWindow ? (
+                      <div className="text-center text-[9px] font-medium text-gray-300">
+                        ยังไม่เปิดจอง
+                      </div>
+                    )
+                    : showLockIcon && cell.inMonth ? (
+                      <div className="flex w-full items-center justify-center text-gray-400" title={splitLocked ? 'ปิดการขายในวันนี้' : 'ยังไม่ได้ตั้งราคา Agent'}>
+                        <Icon name="lock" className="size-3.5" />
+                      </div>
+                    )
+                    : cell.inMonth && price > 0 ? (
+                    isDiscount ? (
+                      <div className="flex flex-col items-start leading-tight">
+                        <span className="text-[9px] text-gray-400 line-through">
+                          ฿{Math.round(price * 1.25).toLocaleString('en-US')}
+                        </span>
+                        <span className="text-[10.5px] font-semibold text-red-500">
+                          ฿{price.toLocaleString('en-US')}
+                        </span>
+                      </div>
+                    ) : (
+                      <div
+                        className={cn(
+                          'text-[10.5px] font-medium tabular-nums',
+                          isSpecial ? 'font-semibold text-blue-600' : 'text-gray-700',
+                        )}
+                      >
+                        ฿{price.toLocaleString('en-US')}
+                      </div>
+                    )
+                  ) : null}
+                </div>
+
+                {/* Strip overlay — drawn on the FIRST cell of any BOOKED / PENDING / MAINTENANCE
+                    strip segment within a row. Uses position:absolute to extend across N cell
+                    widths + a small extension into the checkout day. Strips that wrap across
+                    weekly rows render as TWO segments with squared edges at the row boundary. */}
+                {/* Wrap-checkout indicator: small leftward tab when prev row's Saturday
+                    booking ended and its checkout day falls here. Same color as the strip. */}
+                {wrapStatus && (
+                  <div
+                    aria-hidden
+                    className={cn(
+                      'pointer-events-none absolute bottom-2 left-0 z-10 h-[18px] w-2.5 rounded-r-full',
+                      wrapStatus === 'BOOKED'
+                        ? 'bg-red-500'
+                        : wrapStatus === 'PENDING_PAYMENT'
+                          ? 'bg-amber-400'
+                          : 'bg-gray-500',
+                    )}
+                  />
+                )}
+
+                {isStripFirst && (() => {
+                  // Side bleeds extend the pill past cell boundaries when the strip
+                  // continues onto/from another row — visually overflows the calendar's
+                  // rounded container (which clips overflow), creating a clean wrap effect.
+                  const ROW_BLEED = 16
+                  const leftBleed = planEntry.continuesFromPrevRow ? ROW_BLEED : 0
+                  const rightExt = planEntry.continuesToNextRow
+                    ? ROW_BLEED
+                    : planEntry.extend
+                      ? 16
+                      : 12
+
+                  const stripStatus = planEntry.status
+                  const stripBg =
+                    stripStatus === 'BOOKED'
+                      ? 'bg-red-500'
+                      : stripStatus === 'PENDING_PAYMENT'
+                        ? 'bg-amber-400'
+                        : 'bg-gray-500'
+                  // Use effective fields so sibling-locked cells display the sibling customer name
+                  const stripLabel =
+                    stripStatus === 'UNDER_MAINTENANCE'
+                      ? (dayData?.effectiveNote ?? 'ปิดซ่อม')
+                      : (dayData?.effectiveCustomerName ?? dayData?.effectiveNote ?? '—')
+                  const stripFromSibling = !!dayData?.fromSibling
+
+                  return (
+                    <div
+                      className="pointer-events-none absolute bottom-2 z-10 flex items-center"
+                      style={{
+                        left: `${8 - leftBleed}px`,
+                        width: `calc(${planEntry.stripLen} * 100% - 16px + ${rightExt}px + ${leftBleed}px)`,
+                      }}
+                    >
+                      <div
+                        title={
+                          (stripFromSibling ? '🔒 (รูปแบบห้องอื่น) ' : '') +
+                          stripLabel +
+                          (planEntry.stripLen > 1 ? ` (${planEntry.stripLen} คืน)` : '')
+                        }
+                        className={cn(
+                          'flex w-full items-center gap-1 px-2 py-0.5 text-[10px] font-semibold text-white',
+                          stripBg,
+                          // Sibling-locked strips render slightly lighter so the user can tell at a glance
+                          // that this hold comes from another variant.
+                          stripFromSibling && 'opacity-70',
+                          planEntry.continuesFromPrevRow ? 'rounded-l-none' : 'rounded-l-full',
+                          planEntry.continuesToNextRow ? 'rounded-r-none' : 'rounded-r-full',
+                        )}
+                      >
+                        {stripFromSibling && !planEntry.continuesFromPrevRow && (
+                          <Icon name="lock" className="size-2.5 shrink-0" />
+                        )}
+                        <span className="min-w-0 truncate">{stripLabel}</span>
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
             )
-          }
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => onCellClick(cell.date)}
-              className="aspect-square cursor-pointer rounded-md transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
-              aria-label={key}
-            >
-              {content}
-            </button>
-          )
-        })}
+
+            const cellClass = cn(
+              'relative h-[78px] border-gray-100 transition-colors',
+              !isLastCol && 'border-r',
+              !isLastRow && 'border-b',
+              cellBg,
+              !cell.inMonth && 'bg-gray-50/60',
+              clickable && 'cursor-pointer hover:bg-brand-50/40',
+            )
+
+            if (!clickable) {
+              return (
+                <div key={i} className={cellClass}>
+                  {cellInner}
+                </div>
+              )
+            }
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => onCellClick(cell.date)}
+                title={(() => {
+                  const prefix = fromSibling ? '🔒 (รูปแบบห้องอื่น) ' : ''
+                  if (effectiveStatus === 'BOOKED') {
+                    return `${prefix}จองโดย ${dayData?.effectiveCustomerName ?? '—'}`
+                  }
+                  if (effectiveStatus === 'PENDING_PAYMENT') {
+                    return `${prefix}รอชำระ — ${dayData?.effectiveCustomerName ?? '—'}`
+                  }
+                  if (effectiveStatus === 'UNDER_MAINTENANCE') {
+                    return `${prefix}ปิดซ่อม${dayData?.effectiveNote ? ` — ${dayData.effectiveNote}` : ''}`
+                  }
+                  return undefined
+                })()}
+                className={cn(cellClass, 'focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500')}
+                aria-label={key}
+              >
+                {cellInner}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {isPending && <div className="mt-2 text-center text-[11px] text-gray-400">กำลังโหลด...</div>}

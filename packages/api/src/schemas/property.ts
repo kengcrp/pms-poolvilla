@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
-export const PropertyTypeEnum = z.enum(['POOL_VILLA', 'LOFT', 'BNB'])
+// Property type — references PropertyTypeMaster.code (managed in Admin panel)
+export const PropertyTypeEnum = z.string().min(1)
 export const ReviewStatusEnum = z.enum(['PENDING', 'ACTIVE', 'INACTIVE', 'REJECTED'])
 export const PricingModeEnum = z.enum(['SHOW_SELL', 'SHOW_WHOLESALE', 'HIDE'])
 
@@ -31,6 +32,8 @@ export const propertyUpdateSchema = z.object({
   areaSqwa: z.number().nonnegative().nullable().optional(),
   partnerListing: z.boolean().optional(),
   contactInfo: z.string().nullable().optional(),
+  /** How far ahead (months) guests may book. null = use system default. */
+  bookingWindowMonths: z.number().int().min(0).max(60).nullable().optional(),
   pricingMode: PricingModeEnum.optional(),
   reviewStatus: ReviewStatusEnum.optional(),
   isActive: z.boolean().optional(),

@@ -23,6 +23,7 @@ import {
   faUser,
   faUserGroup,
   faKey,
+  faLock,
 
   // Actions
   faMagnifyingGlass,
@@ -145,6 +146,7 @@ export const ICONS = {
   user: faUser,
   users: faUserGroup,
   key: faKey,
+  lock: faLock,
 
   // Actions
   search: faMagnifyingGlass,

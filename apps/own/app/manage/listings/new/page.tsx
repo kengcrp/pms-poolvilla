@@ -1,16 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { trpc } from '@/lib/trpc'
-import { Button, Card, Input, Label, Select } from '@pms/ui'
+import { Button, Card, Icon, Input, Label, cn, type IconName } from '@pms/ui'
 
 export default function NewListingPage() {
   const router = useRouter()
+  const { data: types } = trpc.property.types.useQuery()
   const [form, setForm] = useState({
     nameTh: '',
-    type: 'POOL_VILLA' as 'POOL_VILLA' | 'LOFT' | 'BNB',
+    type: '',
     totalBedrooms: 1,
     totalBathrooms: 1,
     defaultVariantMaxGuests: 2,
@@ -19,6 +20,13 @@ export default function NewListingPage() {
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Auto-select first type when list loads
+  useEffect(() => {
+    if (types && types.length > 0 && !form.type) {
+      setForm((f) => ({ ...f, type: types[0]!.code }))
+    }
+  }, [types, form.type])
 
   const create = trpc.property.create.useMutation({
     onSuccess: (created) => {
@@ -35,6 +43,7 @@ export default function NewListingPage() {
     e.preventDefault()
     setError(null)
     if (!form.nameTh.trim()) return setError('กรุณาใส่ชื่อที่พัก')
+    if (!form.type) return setError('กรุณาเลือกประเภทที่พัก')
     setSubmitting(true)
     create.mutate({
       name: { th: form.nameTh.trim() },
@@ -65,6 +74,69 @@ export default function NewListingPage() {
       <Card className="p-6">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
+            <Label required>ประเภทที่พัก</Label>
+            {!types && (
+              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/50 px-4 py-6 text-center text-sm text-gray-500">
+                <Icon name="spinner" spin className="mr-2 size-4" /> กำลังโหลดประเภท...
+              </div>
+            )}
+            {types && types.length === 0 && (
+              <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50 px-4 py-6 text-center text-sm text-amber-800">
+                ยังไม่มีประเภทที่พักในระบบ — กรุณาให้ Admin เพิ่มก่อน
+              </div>
+            )}
+            {types && types.length > 0 && (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {types.map((opt) => {
+                  const active = form.type === opt.code
+                  return (
+                    <button
+                      key={opt.code}
+                      type="button"
+                      onClick={() => setForm({ ...form, type: opt.code })}
+                      className={cn(
+                        'group relative flex flex-col items-center gap-2 rounded-xl border-2 px-3 py-4 text-center transition-all',
+                        active
+                          ? 'border-brand-500 bg-brand-50 shadow-sm'
+                          : 'border-gray-200 bg-white hover:border-gray-300',
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'flex size-10 items-center justify-center rounded-xl transition-colors',
+                          active
+                            ? 'bg-brand-600 text-white'
+                            : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200',
+                        )}
+                      >
+                        <Icon name={(opt.iconRef as IconName) ?? 'home'} className="size-4" />
+                      </div>
+                      <div>
+                        <div
+                          className={cn(
+                            'text-sm font-semibold',
+                            active ? 'text-brand-700' : 'text-gray-900',
+                          )}
+                        >
+                          {opt.nameTh}
+                        </div>
+                        {opt.desc && (
+                          <div className="mt-0.5 text-[10.5px] text-gray-500">{opt.desc}</div>
+                        )}
+                      </div>
+                      {active && (
+                        <span className="absolute right-2 top-2 flex size-4 items-center justify-center rounded-full bg-brand-600 text-white">
+                          <Icon name="check" className="size-2.5" />
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          <div>
             <Label required htmlFor="nameTh">
               ชื่อที่พัก (ภาษาไทย)
             </Label>
@@ -78,31 +150,17 @@ export default function NewListingPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="type">ประเภทที่พัก</Label>
-              <Select
-                id="type"
-                value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value as typeof form.type })}
-              >
-                <option value="POOL_VILLA">พูลวิลล่า</option>
-                <option value="LOFT">ลอฟ</option>
-                <option value="BNB">B&B</option>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="areaSqwa">พื้นที่ใช้สอย (ตารางวา)</Label>
-              <Input
-                id="areaSqwa"
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.areaSqwa}
-                onChange={(e) => setForm({ ...form, areaSqwa: e.target.value })}
-                placeholder="ไม่ระบุก็ได้"
-              />
-            </div>
+          <div>
+            <Label htmlFor="areaSqwa">พื้นที่ใช้สอย (ตารางวา)</Label>
+            <Input
+              id="areaSqwa"
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.areaSqwa}
+              onChange={(e) => setForm({ ...form, areaSqwa: e.target.value })}
+              placeholder="ไม่ระบุก็ได้"
+            />
           </div>
 
           <div className="grid grid-cols-3 gap-4">

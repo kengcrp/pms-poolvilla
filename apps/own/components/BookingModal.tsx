@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { trpc } from '@/lib/trpc'
-import { ymdLocal } from '@/lib/date'
+import { ymd } from '@/lib/date'
 import { Badge, Button, Icon, Input, Label, Modal, ModalBody, ModalFooter, Select, Textarea, cn, type IconName } from '@pms/ui'
 
 type Tab = 'quick' | 'pending' | 'invoice' | 'block'
@@ -15,11 +15,14 @@ interface Props {
   initialDate: Date | null
 }
 
-const tabs: { key: Tab; label: string; icon: IconName }[] = [
-  { key: 'quick', label: 'จองด่วน', icon: 'bolt' },
-  { key: 'pending', label: 'รอยอด', icon: 'hourglass' },
-  { key: 'invoice', label: 'ทำใบจอง', icon: 'receipt' },
-  { key: 'block', label: 'ปิดซ่อม', icon: 'toolbox' },
+/** Per-tab active style — matches the eventual booking status color so the
+ *  user immediately sees what they're about to create.
+ *  จองด่วน=BOOKED red, รอชำระ=PENDING amber, ทำใบจอง=brand, ปิดซ่อม=gray. */
+const tabs: { key: Tab; label: string; icon: IconName; activeClass: string }[] = [
+  { key: 'quick',   label: 'จองด่วน',  icon: 'bolt',      activeClass: 'bg-white text-red-600 shadow-sm shadow-red-200 ring-1 ring-red-100' },
+  { key: 'pending', label: 'รอชำระ',   icon: 'hourglass', activeClass: 'bg-white text-amber-600 shadow-sm shadow-amber-200 ring-1 ring-amber-100' },
+  { key: 'invoice', label: 'ทำใบจอง',  icon: 'receipt',   activeClass: 'bg-white text-brand-700 shadow-sm shadow-brand-200 ring-1 ring-brand-100' },
+  { key: 'block',   label: 'ปิดซ่อม',  icon: 'toolbox',   activeClass: 'bg-white text-gray-700 shadow-sm ring-1 ring-gray-200' },
 ]
 
 const statusBadgeMap = {
@@ -34,8 +37,10 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
   const [tab, setTab] = useState<Tab>('quick')
   const [error, setError] = useState<string | null>(null)
 
-  const dateStr = initialDate ? ymdLocal(initialDate) : ''
-  const nextDayStr = initialDate ? ymdLocal(new Date(initialDate.getTime() + 86400000)) : ''
+  // Use UTC-based ymd to match how MiniCalendar / API store dates (UTC midnight).
+  // ymdLocal would shift by 1 day in any timezone west of UTC.
+  const dateStr = initialDate ? ymd(initialDate) : ''
+  const nextDayStr = initialDate ? ymd(new Date(initialDate.getTime() + 86400000)) : ''
 
   const [form, setForm] = useState({
     checkin: '',
@@ -50,6 +55,9 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
     publicNote: '',
     internalNote: '',
     paymentDueAt: '',
+    // Pending tab keeps date + time separately (joined to ISO on submit)
+    paymentDueDate: '',
+    paymentDueTime: '',
     vat: false,
     showLogo: false,
     blockNote: '',
@@ -75,6 +83,8 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
       publicNote: '',
       internalNote: '',
       paymentDueAt: '',
+      paymentDueDate: '',
+      paymentDueTime: '',
       vat: false,
       showLogo: false,
       blockNote: '',
@@ -118,12 +128,32 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
     setForm({ ...form, couponCode: '' })
   }
 
-  const createConfirmed = trpc.booking.createConfirmed.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(e.message) })
-  const createPending = trpc.booking.createPending.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(e.message) })
-  const createInvoice = trpc.booking.createInvoice.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(e.message) })
-  const blockDates = trpc.booking.blockDates.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(e.message) })
-  const cancel = trpc.booking.cancel.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(e.message) })
-  const unblock = trpc.booking.unblockDates.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(e.message) })
+  /**
+   * Translate tRPC/Zod errors into a friendly Thai message.
+   * - Empty-string Zod validation errors → suggest user fill required fields or set price first
+   * - Conflict errors (booking overlap) → already in Thai from the server
+   * - Unknown errors → generic Thai fallback
+   */
+  const friendlyError = (msg: string): string => {
+    if (msg.includes('too_small') || msg.includes('must contain at least')) {
+      return 'กรุณากรอกข้อมูลให้ครบ — หรือไปตั้งราคาที่หน้า "ปรับราคา" ก่อน แล้วลองอีกครั้ง'
+    }
+    if (msg.includes('Required') || msg.includes('required')) {
+      return 'กรอกข้อมูลให้ครบทุกช่องที่จำเป็น'
+    }
+    if (msg.startsWith('[')) {
+      // Raw Zod JSON — fall back to a friendly message
+      return 'ข้อมูลไม่ครบหรือไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง'
+    }
+    return msg
+  }
+
+  const createConfirmed = trpc.booking.createConfirmed.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(friendlyError(e.message)) })
+  const createPending = trpc.booking.createPending.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(friendlyError(e.message)) })
+  const createInvoice = trpc.booking.createInvoice.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(friendlyError(e.message)) })
+  const blockDates = trpc.booking.blockDates.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(friendlyError(e.message)) })
+  const cancel = trpc.booking.cancel.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(friendlyError(e.message)) })
+  const unblock = trpc.booking.unblockDates.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(friendlyError(e.message)) })
 
   const submit = () => {
     if (!variantId) return
@@ -146,19 +176,28 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
     if (tab === 'block') {
       return blockDates.mutate({ variantId: variantId!, checkin: form.checkin, checkout: form.checkout, note: form.blockNote || undefined })
     }
-    if (!form.customerName) return setError('กรุณาระบุชื่อลูกค้า')
+    // Quick + pending: customer name optional — fall back to a placeholder so the DB save succeeds
+    const customerName = form.customerName || '— ไม่ระบุชื่อ —'
     if (tab === 'quick') {
-      return createConfirmed.mutate({ ...base, paymentMethod: form.paymentMethod })
+      return createConfirmed.mutate({ ...base, customerName, paymentMethod: form.paymentMethod })
     }
     if (tab === 'pending') {
-      if (!form.paymentDueAt) return setError('กรุณาระบุวันนัดชำระ')
+      // Combine the split date + time pickers into a single ISO datetime.
+      const dueDate = form.paymentDueDate
+      const dueTime = form.paymentDueTime || '23:59'
+      if (!dueDate) return setError('กรุณาระบุวันนัดชำระ')
+      const paymentDueAt = new Date(`${dueDate}T${dueTime}:00`).toISOString()
       return createPending.mutate({
         ...base,
-        deposit: form.deposit,
-        paymentDueAt: new Date(form.paymentDueAt).toISOString(),
+        customerName,
+        // "amount" in the UI = total expected payment; mirror to deposit so the booking is fully covered
+        deposit: form.total,
+        paymentDueAt,
         paymentMethod: form.paymentMethod,
       })
     }
+    // Invoice still requires a real customer name (printed on the document)
+    if (!form.customerName) return setError('กรุณาระบุชื่อลูกค้า')
     if (tab === 'invoice') {
       return createInvoice.mutate({
         ...base,
@@ -185,7 +224,7 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
                   <span className="font-semibold text-gray-900">{cell.booking.customerName}</span>
                 </div>
                 <div className="mt-1.5 text-xs text-gray-600">
-                  {ymdLocal(cell.booking.checkin)} → {ymdLocal(cell.booking.checkout)} · {cell.booking.guestCount} ท่าน · ฿{Number(cell.booking.total).toLocaleString()}
+                  {ymd(cell.booking.checkin)} → {ymd(cell.booking.checkout)} · {cell.booking.guestCount} ท่าน · ฿{Number(cell.booking.total).toLocaleString()}
                 </div>
                 {cell.booking.publicNote && <div className="mt-1 text-xs text-gray-500">{cell.booking.publicNote}</div>}
               </div>
@@ -230,7 +269,7 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
               className={cn(
                 'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all',
                 tab === t.key
-                  ? 'bg-white text-brand-700 shadow-sm'
+                  ? t.activeClass
                   : 'text-gray-600 hover:text-gray-900',
               )}
             >
@@ -256,7 +295,7 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
           <>
             <div className="mt-4 grid grid-cols-2 gap-4">
               <div>
-                <Label required>ชื่อลูกค้า</Label>
+                <Label required={tab === 'invoice'}>ชื่อลูกค้า</Label>
                 <Input value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} />
               </div>
               <div>
@@ -265,139 +304,104 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-4">
-              <div>
-                <Label>ชื่อผู้จอง</Label>
+            {/* Booker name row — paired with guest-count on invoice, full-width on quick/pending */}
+            {tab === 'invoice' ? (
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <div>
+                  <Label>ผู้ทำรายการ</Label>
+                  <Input
+                    value={form.bookerName}
+                    onChange={(e) => setForm({ ...form, bookerName: e.target.value })}
+                    placeholder={form.customerName || ''}
+                  />
+                </div>
+                <div>
+                  <Label required>จำนวนผู้เข้าพัก</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={form.guestCount}
+                    onChange={(e) => setForm({ ...form, guestCount: Number(e.target.value) })}
+                    placeholder="guests_count"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4">
+                <Label>ผู้ทำรายการ</Label>
                 <Input
                   value={form.bookerName}
                   onChange={(e) => setForm({ ...form, bookerName: e.target.value })}
-                  placeholder={form.customerName || 'ถ้าต่างจากลูกค้า'}
+                  placeholder={form.customerName || ''}
                 />
               </div>
-              <div>
-                <Label required>จำนวนผู้เข้าพัก</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={form.guestCount}
-                  onChange={(e) => setForm({ ...form, guestCount: Number(e.target.value) })}
-                />
-              </div>
-            </div>
+            )}
 
-            <div className="mt-4 grid grid-cols-2 gap-4">
-              <div>
-                <Label required>ราคารวม (฿)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.total}
-                  onChange={(e) => setForm({ ...form, total: Number(e.target.value) })}
-                />
-              </div>
-              <div>
-                <Label>วิธีชำระเงิน</Label>
-                <Select
-                  value={form.paymentMethod}
-                  onChange={(e) => setForm({ ...form, paymentMethod: e.target.value as typeof form.paymentMethod })}
-                >
-                  <option value="TRANSFER">โอนเงิน</option>
-                  <option value="CARD">บัตรเครดิต</option>
-                  <option value="MOBILE_BANKING">Mobile Banking</option>
-                </Select>
-              </div>
-            </div>
+            {/* Pending tab — slim form: temporary-lock note + due date/time + amount only */}
+            {tab === 'pending' && (
+              <>
+                <div className="mt-8">
+                  <div className="text-sm font-medium text-gray-700">ล็อกชั่วคราว (ไม่บังคับ)</div>
+                  <p className="mt-1 text-xs leading-relaxed text-red-500">
+                    ระบบจะล็อกห้องชั่วคราวจนถึงวันนัดชำระ หากไม่ชำระตามกำหนด การจองจะถูกยกเลิกอัตโนมัติ
+                  </p>
+                </div>
 
-            <div className="mt-4">
-              <Label>คูปอง</Label>
-              {appliedCoupon ? (
-                <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="success" dot>
-                      {appliedCoupon.code}
-                    </Badge>
-                    <span className="text-sm text-emerald-800">
-                      ส่วนลด ฿{appliedCoupon.discount.toLocaleString()} · สุทธิ ฿{Math.max(0, form.total - appliedCoupon.discount).toLocaleString()}
-                    </span>
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div>
+                    <Label required>วันนัดชำระ</Label>
+                    <Input
+                      type="date"
+                      value={form.paymentDueDate}
+                      onChange={(e) => setForm({ ...form, paymentDueDate: e.target.value })}
+                    />
                   </div>
-                  <button
-                    type="button"
-                    onClick={clearCoupon}
-                    className="text-xs text-emerald-700 hover:text-emerald-900"
-                  >
-                    ลบ
-                  </button>
+                  <div>
+                    <Label>เวลา</Label>
+                    <Input
+                      type="time"
+                      value={form.paymentDueTime}
+                      onChange={(e) => setForm({ ...form, paymentDueTime: e.target.value })}
+                      placeholder="23:59"
+                    />
+                  </div>
                 </div>
-              ) : (
-                <div className="flex gap-2">
-                  <Input
-                    value={form.couponCode}
-                    onChange={(e) => setForm({ ...form, couponCode: e.target.value.toUpperCase() })}
-                    placeholder="กรอกรหัสคูปอง"
-                    className="font-mono"
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={applyCoupon}
-                    disabled={!form.couponCode || validating}
-                  >
-                    {validating ? '...' : 'ใช้'}
-                  </Button>
-                </div>
-              )}
-            </div>
 
-            {(tab === 'pending' || tab === 'invoice') && (
+                <div className="mt-4">
+                  <Label>จำนวนเงิน (฿)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.total}
+                    onChange={(e) => setForm({ ...form, total: Number(e.target.value) })}
+                    placeholder="0"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Invoice tab — total + deposit row (guest-count handled in the booker row above) */}
+            {tab === 'invoice' && (
               <div className="mt-4 grid grid-cols-2 gap-4">
                 <div>
-                  <Label required={tab === 'pending'}>มัดจำ (฿)</Label>
+                  <Label required>ราคารวม (฿)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.total}
+                    onChange={(e) => setForm({ ...form, total: Number(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label required>มัดจำ (฿)</Label>
                   <Input
                     type="number"
                     min={0}
                     value={form.deposit}
                     onChange={(e) => setForm({ ...form, deposit: Number(e.target.value) })}
+                    placeholder="quantity"
                   />
                 </div>
-                {tab === 'pending' && (
-                  <div>
-                    <Label required>กำหนดวันนัดชำระ</Label>
-                    <Input
-                      type="datetime-local"
-                      value={form.paymentDueAt}
-                      onChange={(e) => setForm({ ...form, paymentDueAt: e.target.value })}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {tab === 'pending' && (
-              <p className="mt-1 text-xs text-gray-500">
-                💡 หากเลยกำหนดและยังไม่ชำระ ระบบจะยกเลิกอัตโนมัติ
-              </p>
-            )}
-
-            {tab === 'invoice' && (
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 transition-colors hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={form.vat}
-                    onChange={(e) => setForm({ ...form, vat: e.target.checked })}
-                    className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-                  />
-                  <span className="text-sm text-gray-700">VAT 7%</span>
-                </label>
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 transition-colors hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={form.showLogo}
-                    onChange={(e) => setForm({ ...form, showLogo: e.target.checked })}
-                    className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-                  />
-                  <span className="text-sm text-gray-700">แสดงโลโก้ในใบจอง</span>
-                </label>
               </div>
             )}
 
@@ -411,6 +415,47 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
                 <Textarea rows={3} value={form.internalNote} onChange={(e) => setForm({ ...form, internalNote: e.target.value })} />
               </div>
             </div>
+
+            {/* Invoice tab — VAT + logo checkboxes printed on the booking document */}
+            {tab === 'invoice' && (
+              <div className="mt-4 space-y-2">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={form.vat}
+                    onChange={(e) => setForm({ ...form, vat: e.target.checked })}
+                    className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                  />
+                  <span className="text-sm text-gray-700">VAT 7%</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={form.showLogo}
+                    onChange={(e) => setForm({ ...form, showLogo: e.target.checked })}
+                    className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                  />
+                  <span className="text-sm text-gray-700">แสดงโลโก้ในใบจอง</span>
+                </label>
+              </div>
+            )}
+
+            {/* Status indicator — clarifies what status the booking will get on submit */}
+            {tab === 'quick' && (
+              <div className="mt-4">
+                <Badge variant="danger" dot>จองแล้ว</Badge>
+              </div>
+            )}
+            {tab === 'pending' && (
+              <div className="mt-4">
+                <Badge variant="warning" dot>รอชำระ</Badge>
+              </div>
+            )}
+            {tab === 'invoice' && (
+              <div className="mt-4">
+                <Badge variant="danger" dot>จองแล้ว</Badge>
+              </div>
+            )}
           </>
         )}
 
@@ -437,7 +482,7 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
           ปิด
         </Button>
         <Button onClick={submit} variant={tab === 'block' ? 'secondary' : tab === 'invoice' ? 'primary' : 'primary'}>
-          {tab === 'block' ? 'ปิดซ่อม' : tab === 'invoice' ? 'ออกใบจอง' : tab === 'pending' ? 'บันทึก รอยอด' : 'จองด่วน'}
+          {tab === 'block' ? 'ปิดซ่อม' : tab === 'invoice' ? 'ออกใบจอง' : tab === 'pending' ? 'บันทึก รอชำระ' : 'จองด่วน'}
         </Button>
       </ModalFooter>
     </Modal>

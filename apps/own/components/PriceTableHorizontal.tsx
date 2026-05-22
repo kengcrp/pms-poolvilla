@@ -3,26 +3,58 @@
 import { useMemo, useState } from 'react'
 import { trpc } from '@/lib/trpc'
 import { Icon, cn } from '@pms/ui'
-import { formatMonthLabel, ymd } from '@/lib/date'
+import { THAI_MONTHS, ymd } from '@/lib/date'
+import { useT } from '@/lib/i18n'
 
 interface Props {
   propertyId: string
   onCellClick?: (variantId: string, date: Date) => void
+  /** Controlled "ราคาขาย / ส่ง Agent" mode. When provided, the internal toggle UI is hidden. */
+  priceMode?: 'sell' | 'agent'
 }
 
-const DOW_SHORT = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'] as const
+/** Day-of-week i18n keys indexed 0..6 (Sun..Sat) */
+const DOW_KEYS = [
+  'dow.sunday',
+  'dow.monday',
+  'dow.tuesday',
+  'dow.wednesday',
+  'dow.thursday',
+  'dow.friday',
+  'dow.saturday',
+] as const
+
+const MONTH_SHORT_TH = [
+  'ม.ค.',
+  'ก.พ.',
+  'มี.ค.',
+  'เม.ย.',
+  'พ.ค.',
+  'มิ.ย.',
+  'ก.ค.',
+  'ส.ค.',
+  'ก.ย.',
+  'ต.ค.',
+  'พ.ย.',
+  'ธ.ค.',
+] as const
 
 /**
  * Layout 3 — Variants as rows, days as horizontal columns (scrollable).
- * Compact view for comparing all variants across the month.
+ * Runblook-style: English DOW + Thai short date, Sunday column highlighted,
+ * full price values, BOOKED cells as red pills with text.
  */
-export function PriceTableHorizontal({ propertyId, onCellClick }: Props) {
+export function PriceTableHorizontal({ propertyId, onCellClick, priceMode: controlledMode }: Props) {
+  const t = useT()
   const today = useMemo(() => {
     const d = new Date()
     return { year: d.getUTCFullYear(), month0: d.getUTCMonth() }
   }, [])
   const [view, setView] = useState(today)
-  const [priceMode, setPriceMode] = useState<'sell' | 'agent'>('sell')
+  const [internalMode, setInternalMode] = useState<'sell' | 'agent'>('sell')
+  const isControlled = controlledMode !== undefined
+  const priceMode = controlledMode ?? internalMode
+  const setPriceMode = setInternalMode
 
   const from = new Date(Date.UTC(view.year, view.month0, 1))
   const to = new Date(Date.UTC(view.year, view.month0 + 1, 0))
@@ -61,173 +93,337 @@ export function PriceTableHorizontal({ propertyId, onCellClick }: Props) {
 
   return (
     <div>
-      <div className="mb-3 inline-flex rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
-        <button
-          type="button"
-          onClick={() => setPriceMode('sell')}
-          className={cn(
-            'rounded-lg px-4 py-1.5 text-sm font-semibold transition-all',
-            priceMode === 'sell'
-              ? 'bg-brand-50 text-brand-700'
-              : 'text-gray-500 hover:text-gray-700',
-          )}
-        >
-          ราคาขาย
-        </button>
-        <button
-          type="button"
-          onClick={() => setPriceMode('agent')}
-          className={cn(
-            'rounded-lg px-4 py-1.5 text-sm font-semibold transition-all',
-            priceMode === 'agent'
-              ? 'bg-brand-50 text-brand-700'
-              : 'text-gray-500 hover:text-gray-700',
-          )}
-          title="ราคาสำหรับ Agent (ฟีเจอร์เต็มอยู่ใน roadmap)"
-        >
-          ส่ง Agent
-        </button>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2.5">
-        <button
-          type="button"
-          onClick={() => nav(-1)}
-          className="flex size-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-        >
-          <Icon name="chevronLeft" className="size-3.5" />
-        </button>
-        <div className="rounded-lg bg-gray-50 px-4 py-1 text-sm font-semibold text-gray-700">
-          {formatMonthLabel(view.year, view.month0)}
+      {/* Top bar — single grouped month nav (left) + jump-to-today + price-mode toggle (right) */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        {/* Month navigator: [<] พฤษภาคม 2569 [>] grouped together */}
+        <div className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-1.5 py-1 shadow-inner">
+          <button
+            type="button"
+            onClick={() => nav(-1)}
+            className="flex size-8 items-center justify-center rounded-full bg-white text-gray-600 shadow-sm transition-colors hover:bg-brand-50 hover:text-brand-700"
+            aria-label="เดือนก่อน"
+            title="เดือนก่อนหน้า"
+          >
+            <Icon name="chevronLeft" className="size-3.5" />
+          </button>
+          <div className="min-w-[140px] text-center text-sm font-semibold text-gray-800 tabular-nums">
+            {THAI_MONTHS[view.month0]} {view.year + 543}
+          </div>
+          <button
+            type="button"
+            onClick={() => nav(1)}
+            className="flex size-8 items-center justify-center rounded-full bg-white text-gray-600 shadow-sm transition-colors hover:bg-brand-50 hover:text-brand-700"
+            aria-label="เดือนถัดไป"
+            title="เดือนถัดไป"
+          >
+            <Icon name="chevronRight" className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setView(today)}
+            className="ml-0.5 rounded-full px-3 py-1.5 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+            title="กลับไปเดือนปัจจุบัน"
+          >
+            วันนี้
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => nav(1)}
-          className="flex size-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-        >
-          <Icon name="chevronRight" className="size-3.5" />
-        </button>
+
+        {/* ราคาขาย / ราคาส่ง toggle — hidden when caller owns the price-mode state */}
+        {!isControlled && (
+          <div className="inline-flex rounded-full bg-gray-100 p-1 shadow-inner">
+            <button
+              type="button"
+              onClick={() => setPriceMode('sell')}
+              className={cn(
+                'rounded-full px-5 py-1.5 text-xs font-semibold transition-all',
+                priceMode === 'sell'
+                  ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/30'
+                  : 'text-gray-500 hover:text-gray-700',
+              )}
+            >
+              ราคาขาย
+            </button>
+            <button
+              type="button"
+              onClick={() => setPriceMode('agent')}
+              className={cn(
+                'rounded-full px-5 py-1.5 text-xs font-semibold transition-all',
+                priceMode === 'agent'
+                  ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/30'
+                  : 'text-gray-500 hover:text-gray-700',
+              )}
+              title="ราคาสำหรับ Agent (ฟีเจอร์เต็มอยู่ใน roadmap)"
+            >
+              ราคาส่ง
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
-          <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="sticky left-0 z-10 w-32 border-r border-gray-200 bg-gray-50 px-2 py-1.5 text-left text-[10.5px] font-semibold text-gray-500">
-                ประเภท
-              </th>
-              <th className="w-16 border-r border-gray-200 px-1 py-1.5 text-center text-[10.5px] font-semibold text-gray-500">
-                จำนวน
-              </th>
-              {days.map((d) => {
-                const key = ymd(d)
-                const isToday = key === todayKey
-                const dow = d.getUTCDay()
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr>
+                {/* Top-left: empty corner (month nav lives above the table now) */}
+                <th
+                  colSpan={2}
+                  className="sticky left-0 z-20 border-b border-r border-gray-200 bg-gray-50 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                >
+                  ห้อง / ขนาด
+                </th>
+                {days.map((d) => {
+                  const key = ymd(d)
+                  const dow = d.getUTCDay()
+                  const isSunday = dow === 0
+                  const isToday = key === todayKey
+                  return (
+                    <th
+                      key={key}
+                      className={cn(
+                        'min-w-[120px] border-b border-l border-gray-200 px-2 py-3 text-center align-middle',
+                        isSunday ? 'bg-sky-200/70' : 'bg-white',
+                        isToday && !isSunday && 'bg-brand-50',
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'text-[11px] font-medium',
+                          isSunday ? 'text-sky-900' : 'text-gray-500',
+                        )}
+                      >
+                        {t(DOW_KEYS[dow]!)}
+                      </div>
+                      <div
+                        className={cn(
+                          'mt-1 text-[11px] font-semibold',
+                          isSunday ? 'text-sky-900' : 'text-gray-700',
+                        )}
+                      >
+                        {d.getUTCDate()} {MONTH_SHORT_TH[d.getUTCMonth()]}
+                      </div>
+                    </th>
+                  )
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {variants.map((v) => {
+                const label = v.variant.isDefault ? 'เหมาหลัง' : 'แบ่งห้องนอน'
+                const dayByKey = new Map(v.days.map((x) => [ymd(new Date(x.date)), x]))
+
+                // ── Build render plan ──
+                // Walk days once and group consecutive BOOKED / PENDING / MAINTENANCE
+                // cells that share the same booking (or same status for maintenance).
+                // Each plan entry is either:
+                //   - { kind: 'skip' }       — absorbed by a previous colSpan
+                //   - { kind: 'cell', span } — render a normal <td colSpan=span>
+                type Plan =
+                  | { kind: 'skip' }
+                  | { kind: 'cell'; span: number }
+                const plan: Plan[] = new Array(days.length)
+
+                const isStripStatus = (s: string) =>
+                  s === 'BOOKED' || s === 'PENDING_PAYMENT' || s === 'UNDER_MAINTENANCE'
+
+                let walk = 0
+                while (walk < days.length) {
+                  const startDate = days[walk]!
+                  const startDay = dayByKey.get(ymd(startDate))
+                  if (startDay && isStripStatus(startDay.status)) {
+                    let len = 1
+                    while (walk + len < days.length) {
+                      const nextDate = days[walk + len]!
+                      const nextDay = dayByKey.get(ymd(nextDate))
+                      if (!nextDay) break
+                      if (nextDay.status !== startDay.status) break
+                      // Match by bookingId for BOOKED/PENDING; same status is enough for MAINTENANCE
+                      if (startDay.status !== 'UNDER_MAINTENANCE') {
+                        if (!startDay.bookingId || nextDay.bookingId !== startDay.bookingId) break
+                      }
+                      len++
+                    }
+                    plan[walk] = { kind: 'cell', span: len }
+                    for (let j = 1; j < len; j++) plan[walk + j] = { kind: 'skip' }
+                    walk += len
+                  } else {
+                    plan[walk] = { kind: 'cell', span: 1 }
+                    walk += 1
+                  }
+                }
+
                 return (
-                  <th
-                    key={key}
-                    className={cn(
-                      'min-w-[52px] px-1 py-1.5 text-center text-[10px] font-medium',
-                      isToday ? 'bg-brand-100 text-brand-800' : 'text-gray-500',
-                    )}
-                  >
-                    <div>{DOW_SHORT[dow]}</div>
-                    <div className="text-[11px] font-semibold">{d.getUTCDate()}</div>
-                  </th>
-                )
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {variants.map((v) => {
-              const name = (v.variant.name as { th?: string })?.th ?? `${v.variant.bedrooms} นอน`
-              const label = v.variant.isDefault ? 'เหมาหลัง' : 'แบ่งห้องนอน'
-              return (
-                <tr key={v.variant.id} className="border-b border-gray-100 last:border-b-0">
-                  <td className="sticky left-0 z-10 border-r border-gray-200 bg-white px-2 py-1.5 text-left text-xs">
-                    <div className="font-medium text-gray-800">{label}</div>
-                    <div className="text-[10px] text-gray-400" title={name}>
-                      {v.variant.bedrooms} ห้องนอน
-                    </div>
-                  </td>
-                  <td className="border-r border-gray-200 px-1 py-1.5 text-center text-[10.5px] text-gray-600">
-                    {v.variant.maxGuests} ท่าน
-                  </td>
-                  {days.map((d) => {
-                    const key = ymd(d)
-                    const day = v.days.find((x) => ymd(new Date(x.date)) === key)
-                    const isToday = key === todayKey
-                    if (!day) {
+                  <tr key={v.variant.id} className="border-b border-gray-100 last:border-b-0">
+                    {/* Label column — plain text only (weekly-rate config is on the header button) */}
+                    <td className="sticky left-0 z-10 whitespace-nowrap border-r border-gray-200 bg-white px-4 py-3 align-middle">
+                      <div className="text-sm font-medium text-gray-800">{label}</div>
+                    </td>
+                    {/* Capacity column */}
+                    <td className="whitespace-nowrap border-r border-gray-200 bg-white px-3 py-3 text-center align-middle">
+                      <div className="text-xs text-gray-600">{v.variant.maxGuests} ท่าน</div>
+                    </td>
+                    {days.map((d, dayIdx) => {
+                      const p = plan[dayIdx]!
+                      if (p.kind === 'skip') return null
+                      const colSpan = p.span
+
+                      const key = ymd(d)
+                      const day = dayByKey.get(key)
+                      const isToday = key === todayKey
+
+                      const cellBg = cn('border-l border-gray-100 bg-white')
+
+                      if (!day) {
+                        return (
+                          <td key={key} colSpan={colSpan} className={cn('px-1 py-2 text-center text-[10px] text-gray-300', cellBg)}>
+                            —
+                          </td>
+                        )
+                      }
+                      const status = day.status
+                      const priceType = day.priceType
+
+                      // BOOKED / PENDING / MAINTENANCE — single <td colSpan={N}> with one continuous pill
+                      if (status === 'BOOKED' || status === 'PENDING_PAYMENT' || status === 'UNDER_MAINTENANCE') {
+                        const pillBg =
+                          status === 'BOOKED'
+                            ? 'bg-red-500 hover:bg-red-600'
+                            : status === 'PENDING_PAYMENT'
+                              ? 'bg-amber-400 hover:bg-amber-500'
+                              : 'bg-gray-400 hover:bg-gray-500'
+
+                        const labelName =
+                          status === 'UNDER_MAINTENANCE'
+                            ? (day.note ?? 'ปิด')
+                            : (day.customerName ?? '—')
+                        // cellLabel is split into name + suffix so the suffix never gets truncated
+
+                        const tooltip =
+                          status === 'BOOKED'
+                            ? `จองโดย ${day.customerName ?? '—'}${colSpan > 1 ? ` (${colSpan} คืน)` : ''}${day.note ? ` · ${day.note}` : ''}`
+                            : status === 'PENDING_PAYMENT'
+                              ? `รอชำระ — ${day.customerName ?? '—'}${colSpan > 1 ? ` (${colSpan} คืน)` : ''}`
+                              : `ปิดซ่อม${day.note ? ` — ${day.note}` : ''}`
+
+                        // Strip extends past the right edge — applies to BOOKED, PENDING,
+                        // and MAINTENANCE for consistent visual behavior.
+                        // 22px normal; reduced to 12px when next cell is another strip
+                        // (keeps a small visible gap between back-to-back strips).
+                        const nextDayIdx = dayIdx + colSpan
+                        const nextDay =
+                          nextDayIdx < days.length ? dayByKey.get(ymd(days[nextDayIdx]!)) : undefined
+                        const nextIsAnotherStrip =
+                          !!nextDay &&
+                          (nextDay.status === 'BOOKED' ||
+                            nextDay.status === 'PENDING_PAYMENT' ||
+                            nextDay.status === 'UNDER_MAINTENANCE')
+                        const canExtend =
+                          status === 'BOOKED' ||
+                          status === 'PENDING_PAYMENT' ||
+                          status === 'UNDER_MAINTENANCE'
+                        const extensionPx = canExtend ? (nextIsAnotherStrip ? 12 : 16) : null
+                        return (
+                          <td
+                            key={key}
+                            colSpan={colSpan}
+                            className={cn('relative p-1.5 align-middle', cellBg)}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => onCellClick?.(v.variant.id, new Date(day.date))}
+                              title={tooltip}
+                              style={
+                                extensionPx !== null
+                                  ? { width: `calc(100% + ${extensionPx}px)` }
+                                  : undefined
+                              }
+                              className={cn(
+                                'flex h-9 items-center rounded-full px-3 text-[11px] font-semibold text-white transition-colors',
+                                pillBg,
+                                extensionPx !== null
+                                  ? 'relative z-10 w-auto justify-start'
+                                  : 'w-full justify-start',
+                              )}
+                              aria-label={`${key} · ${tooltip}`}
+                            >
+                              <span className="min-w-0 truncate text-left">
+                                {labelName}
+                              </span>
+                            </button>
+                          </td>
+                        )
+                      }
+
+                      // Locked-by-sibling: render lock icon instead of price
+                      if (day.lockedBySibling) {
+                        return (
+                          <td
+                            key={key}
+                            className={cn('px-1 py-2 text-center align-middle bg-gray-50', cellBg)}
+                          >
+                            <div className="flex items-center justify-center text-gray-400" title="ถูกล็อก — มีการจองในรูปแบบห้องอื่น">
+                              <Icon name="lock" className="size-3.5" />
+                            </div>
+                          </td>
+                        )
+                      }
+
+                      // Price text color based on priceType
+                      const textColor =
+                        priceType === 'SPECIAL'
+                          ? 'text-blue-600 font-semibold underline decoration-blue-300 underline-offset-2'
+                          : priceType === 'DISCOUNT'
+                            ? 'text-red-500 font-semibold'
+                            : 'text-gray-700'
+                      const arrow = priceType === 'DISCOUNT' ? ' ↓' : ''
+
+                      // Pick price based on toggle — agentPrice null shows lock icon instead of "฿0".
+                      // Also coerce NaN/undefined to null so we never render "฿NaN".
+                      const rawDisplayed =
+                        priceMode === 'agent'
+                          ? day.agentPrice
+                          : day.price
+                      const numericPrice =
+                        typeof rawDisplayed === 'number' && Number.isFinite(rawDisplayed)
+                          ? rawDisplayed
+                          : null
+                      // Split variant + weekly Lock for this DOW → no sale → lock icon for BOTH modes
+                      const splitLocked = !v.variant.isDefault && day.splitOpen === false
+                      const displayed = splitLocked ? null : numericPrice
                       return (
                         <td
                           key={key}
-                          className={cn('px-0.5 py-1 text-center text-[10px]', isToday && 'bg-brand-50/30')}
+                          className={cn('px-1 py-2 text-center align-middle', cellBg)}
                         >
-                          —
-                        </td>
-                      )
-                    }
-                    const status = day.status
-                    const priceType = day.priceType
-                    if (status === 'BOOKED' || status === 'PENDING_PAYMENT' || status === 'UNDER_MAINTENANCE') {
-                      const bg =
-                        status === 'BOOKED'
-                          ? 'bg-red-500'
-                          : status === 'PENDING_PAYMENT'
-                            ? 'bg-amber-400'
-                            : 'bg-gray-400'
-                      return (
-                        <td key={key} className={cn('p-0.5', isToday && 'bg-brand-50/30')}>
                           <button
                             type="button"
                             onClick={() => onCellClick?.(v.variant.id, new Date(day.date))}
-                            className={cn('h-5 w-full rounded', bg)}
-                            aria-label={key}
-                          />
+                            className={cn(
+                              'rounded px-1.5 py-0.5 text-[11px] tabular-nums transition-colors hover:bg-gray-100',
+                              textColor,
+                            )}
+                          >
+                            {displayed === null ? (
+                              <span className="inline-flex items-center justify-center text-gray-400" title="ยังไม่ได้ตั้งราคา / ปิดการขาย">
+                                <Icon name="lock" className="size-3.5" />
+                              </span>
+                            ) : (
+                              <>
+                                ฿{displayed.toLocaleString('en-US')}
+                                {arrow}
+                              </>
+                            )}
+                          </button>
                         </td>
                       )
-                    }
-                    const textColor =
-                      priceType === 'SPECIAL'
-                        ? 'text-blue-700 font-medium'
-                        : priceType === 'DISCOUNT'
-                          ? 'text-emerald-700 font-medium'
-                          : 'text-gray-700'
-                    return (
-                      <td
-                        key={key}
-                        className={cn(
-                          'px-0.5 py-1 text-center text-[10px]',
-                          isToday && 'bg-brand-50/30',
-                        )}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => onCellClick?.(v.variant.id, new Date(day.date))}
-                          className={cn('rounded px-1 transition-colors hover:bg-gray-100', textColor)}
-                        >
-                          {formatShortBaht(day.price)}
-                        </button>
-                      </td>
-                    )
-                  })}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+                    })}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )
-}
-
-function formatShortBaht(n: number) {
-  if (n === 0) return '—'
-  if (n >= 1000) {
-    const k = n / 1000
-    return `฿${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`
-  }
-  return `฿${n}`
 }

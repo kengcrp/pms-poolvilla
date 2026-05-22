@@ -1,19 +1,29 @@
 'use client'
 
-import { use, useMemo, useState } from 'react'
+import { use, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { trpc } from '@/lib/trpc'
 import { Badge, Icon, Input, Select, cn } from '@pms/ui'
 
+type Tab = 'villa' | 'hotel'
+
 export default function SaleLandingPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
   const { data, isPending, error } = trpc.public.ownerBySlug.useQuery({ slug })
+  const { data: hotelTypes } = trpc.public.hotelTypes.useQuery()
 
+  const [tab, setTab] = useState<Tab>('villa')
+
+  // Villa filters
   const [search, setSearch] = useState('')
   const [locationId, setLocationId] = useState('')
   const [minBed, setMinBed] = useState(0)
   const [poolOnly, setPoolOnly] = useState(false)
+
+  // Hotel filters
+  const [hSearch, setHSearch] = useState('')
+  const [hType, setHType] = useState('')
 
   // Unique locations from properties
   const locations = useMemo(() => {
@@ -29,7 +39,7 @@ export default function SaleLandingPage({ params }: { params: Promise<{ slug: st
     return Array.from(m.values()).sort((a, b) => a.name.localeCompare(b.name))
   }, [data])
 
-  const filtered = useMemo(() => {
+  const filteredVillas = useMemo(() => {
     if (!data) return []
     const q = search.trim().toLowerCase()
     return data.properties.filter((p) => {
@@ -42,16 +52,49 @@ export default function SaleLandingPage({ params }: { params: Promise<{ slug: st
     })
   }, [data, search, locationId, minBed, poolOnly])
 
+  const filteredHotels = useMemo(() => {
+    if (!data) return []
+    const q = hSearch.trim().toLowerCase()
+    return data.hotels.filter((h) => {
+      const name = (h.name as { th?: string })?.th?.toLowerCase() ?? h.code.toLowerCase()
+      if (q && !name.includes(q) && !h.code.toLowerCase().includes(q)) return false
+      if (hType && h.hotelType !== hType) return false
+      return true
+    })
+  }, [data, hSearch, hType])
+
+  // Hotel type counts (for showing available types)
+  const hotelTypeCounts = useMemo(() => {
+    if (!data) return new Map<string, number>()
+    const m = new Map<string, number>()
+    for (const h of data.hotels) m.set(h.hotelType, (m.get(h.hotelType) ?? 0) + 1)
+    return m
+  }, [data])
+
+  // Auto-pick the tab that has content (when owner only has one type)
+  useEffect(() => {
+    if (!data) return
+    if (data.properties.length === 0 && data.hotels.length > 0 && tab === 'villa') setTab('hotel')
+    else if (data.hotels.length === 0 && data.properties.length > 0 && tab === 'hotel') setTab('villa')
+  }, [data, tab])
+
   if (error?.data?.code === 'NOT_FOUND') notFound()
 
   if (isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-sm text-gray-500">กำลังโหลด...</div>
+        <div className="text-sm text-gray-500">
+          <Icon name="spinner" spin className="mr-2 size-4" />
+          กำลังโหลด...
+        </div>
       </div>
     )
   }
   if (!data) return null
+
+  const totalCount = data.properties.length + data.hotels.length
+  const villaCount = data.properties.length
+  const hotelCount = data.hotels.length
 
   return (
     <>
@@ -63,7 +106,12 @@ export default function SaleLandingPage({ params }: { params: Promise<{ slug: st
             </div>
             <div>
               <div className="text-base font-bold tracking-tight text-gray-900">{data.owner.name}</div>
-              <div className="text-[11px] text-gray-500">{data.properties.length} ที่พัก</div>
+              <div className="text-[11px] text-gray-500">
+                {villaCount > 0 && `${villaCount} ที่พัก`}
+                {villaCount > 0 && hotelCount > 0 && ' · '}
+                {hotelCount > 0 && `${hotelCount} โรงแรม`}
+                {totalCount === 0 && 'ไม่มีที่พัก'}
+              </div>
             </div>
           </div>
           {data.owner.phone && (
@@ -78,137 +126,250 @@ export default function SaleLandingPage({ params }: { params: Promise<{ slug: st
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-8">
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">
             ที่พักของ {data.owner.name}
           </h1>
           <p className="mt-1 text-sm text-gray-600">เลือกที่พักที่คุณสนใจ ตรวจสอบวันว่าง และจองได้ทันที</p>
         </div>
 
-        {/* Filters */}
-        <div className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-gray-200 bg-white p-4 sm:grid-cols-[2fr_1fr_1fr_auto]">
-          <Input
-            placeholder="ค้นหาชื่อที่พัก..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-            <option value="">ทุกพื้นที่</option>
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name} ({l.count})
-              </option>
-            ))}
-          </Select>
-          <Select value={String(minBed)} onChange={(e) => setMinBed(Number(e.target.value))}>
-            <option value="0">ห้องนอนทุกขนาด</option>
-            <option value="1">1+ ห้องนอน</option>
-            <option value="2">2+ ห้องนอน</option>
-            <option value="3">3+ ห้องนอน</option>
-            <option value="4">4+ ห้องนอน</option>
-            <option value="5">5+ ห้องนอน</option>
-          </Select>
-          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2.5 transition-colors hover:bg-gray-50">
-            <input
-              type="checkbox"
-              checked={poolOnly}
-              onChange={(e) => setPoolOnly(e.target.checked)}
-              className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-            />
-            <Icon name="water" className="size-3.5 text-blue-500" />
-            <span className="whitespace-nowrap text-sm text-gray-700">มีสระเท่านั้น</span>
-          </label>
-        </div>
-
-        <div className="mb-3 text-xs text-gray-500">
-          พบ {filtered.length} จาก {data.properties.length} ที่พัก
-          {(search || locationId || minBed > 0 || poolOnly) && (
+        {/* Tab switcher — show only if owner has BOTH types */}
+        {villaCount > 0 && hotelCount > 0 && (
+          <div className="mb-5 inline-flex rounded-xl bg-gray-100 p-1">
             <button
               type="button"
-              onClick={() => {
-                setSearch('')
-                setLocationId('')
-                setMinBed(0)
-                setPoolOnly(false)
-              }}
-              className="ml-2 text-brand-700 hover:underline"
+              onClick={() => setTab('villa')}
+              className={cn(
+                'rounded-lg px-4 py-2 text-sm font-medium transition-all',
+                tab === 'villa' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-600 hover:text-gray-900',
+              )}
             >
-              ล้างตัวกรอง
+              <Icon name="home" className="mr-1.5 size-3.5" /> ที่พัก ({villaCount})
             </button>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={() => setTab('hotel')}
+              className={cn(
+                'rounded-lg px-4 py-2 text-sm font-medium transition-all',
+                tab === 'hotel' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-600 hover:text-gray-900',
+              )}
+            >
+              <Icon name="bed" className="mr-1.5 size-3.5" /> โรงแรม ({hotelCount})
+            </button>
+          </div>
+        )}
 
-        {data.properties.length === 0 ? (
+        {/* ============== VILLA TAB ============== */}
+        {tab === 'villa' && villaCount > 0 && (
+          <>
+            <div className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-gray-200 bg-white p-4 sm:grid-cols-[2fr_1fr_1fr_auto]">
+              <Input placeholder="ค้นหาชื่อที่พัก..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+                <option value="">ทุกพื้นที่</option>
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name} ({l.count})
+                  </option>
+                ))}
+              </Select>
+              <Select value={String(minBed)} onChange={(e) => setMinBed(Number(e.target.value))}>
+                <option value="0">ห้องนอนทุกขนาด</option>
+                <option value="1">1+ ห้องนอน</option>
+                <option value="2">2+ ห้องนอน</option>
+                <option value="3">3+ ห้องนอน</option>
+                <option value="4">4+ ห้องนอน</option>
+                <option value="5">5+ ห้องนอน</option>
+              </Select>
+              <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2.5 hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={poolOnly}
+                  onChange={(e) => setPoolOnly(e.target.checked)}
+                  className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                />
+                <Icon name="water" className="size-3.5 text-blue-500" />
+                <span className="whitespace-nowrap text-sm text-gray-700">มีสระเท่านั้น</span>
+              </label>
+            </div>
+
+            <div className="mb-3 text-xs text-gray-500">
+              พบ {filteredVillas.length} จาก {villaCount} ที่พัก
+              {(search || locationId || minBed > 0 || poolOnly) && (
+                <button
+                  type="button"
+                  onClick={() => { setSearch(''); setLocationId(''); setMinBed(0); setPoolOnly(false) }}
+                  className="ml-2 text-brand-700 hover:underline"
+                >
+                  ล้างตัวกรอง
+                </button>
+              )}
+            </div>
+
+            {filteredVillas.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center">
+                <Icon name="search" className="mb-3 text-4xl text-gray-300" />
+                <p className="text-sm text-gray-500">ไม่พบที่พักตามเงื่อนไข — ลองปรับตัวกรอง</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredVillas.map((p) => {
+                  const name = (p.name as { th?: string })?.th ?? p.code
+                  const cover = p.images[0]?.url
+                  const variant = p.variants[0]
+                  const hasPool = p.pools.length > 0
+                  return (
+                    <Link
+                      key={p.id}
+                      href={`/sale/${slug}/${p.code}`}
+                      className="group overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:ring-brand-300"
+                    >
+                      <div className="relative aspect-[4/3] bg-gradient-to-br from-gray-100 to-gray-200">
+                        {cover ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={cover} alt={name} className="size-full object-cover transition-transform group-hover:scale-105" />
+                        ) : (
+                          <div className="flex size-full items-center justify-center text-5xl text-gray-300">
+                            <Icon name="home" />
+                          </div>
+                        )}
+                        {p.location?.location && (
+                          <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur">
+                            <Icon name="pin" className="size-3 text-brand-600" />
+                            {p.location.location.name}
+                          </div>
+                        )}
+                        {hasPool && (
+                          <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-blue-500/90 px-2.5 py-1 text-xs font-medium text-white shadow-sm backdrop-blur">
+                            <Icon name="water" className="size-3" /> มีสระ
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-5">
+                        <h3 className="text-base font-semibold text-gray-900">{name}</h3>
+                        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-600">
+                          <span className="flex items-center gap-1"><Icon name="bed" className="size-3 text-gray-400" /> {p.totalBedrooms} ห้องนอน</span>
+                          <span className="flex items-center gap-1"><Icon name="bath" className="size-3 text-gray-400" /> {p.totalBathrooms} ห้องน้ำ</span>
+                          {variant && (
+                            <span className="flex items-center gap-1"><Icon name="users" className="size-3 text-gray-400" /> {variant.maxGuests} ท่าน</span>
+                          )}
+                        </div>
+                        <div className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 transition-all group-hover:gap-2.5">
+                          ดูรายละเอียดและจอง
+                          <Icon name="chevronRight" className="size-3" />
+                        </div>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ============== HOTEL TAB ============== */}
+        {tab === 'hotel' && hotelCount > 0 && (
+          <>
+            <div className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-gray-200 bg-white p-4 sm:grid-cols-[2fr_1fr]">
+              <Input placeholder="ค้นหาชื่อโรงแรม..." value={hSearch} onChange={(e) => setHSearch(e.target.value)} />
+              <Select value={hType} onChange={(e) => setHType(e.target.value)}>
+                <option value="">ทุกประเภทโรงแรม</option>
+                {(hotelTypes ?? [])
+                  .filter((t) => hotelTypeCounts.has(t.code))
+                  .map((t) => (
+                    <option key={t.code} value={t.code}>
+                      {t.nameTh} ({hotelTypeCounts.get(t.code)})
+                    </option>
+                  ))}
+              </Select>
+            </div>
+
+            <div className="mb-3 text-xs text-gray-500">
+              พบ {filteredHotels.length} จาก {hotelCount} โรงแรม
+              {(hSearch || hType) && (
+                <button
+                  type="button"
+                  onClick={() => { setHSearch(''); setHType('') }}
+                  className="ml-2 text-brand-700 hover:underline"
+                >
+                  ล้างตัวกรอง
+                </button>
+              )}
+            </div>
+
+            {filteredHotels.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center">
+                <Icon name="search" className="mb-3 text-4xl text-gray-300" />
+                <p className="text-sm text-gray-500">ไม่พบโรงแรมตามเงื่อนไข</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredHotels.map((h) => {
+                  const name = (h.name as { th?: string })?.th ?? h.code
+                  const typeLabel = (hotelTypes ?? []).find((t) => t.code === h.hotelType)?.nameTh ?? h.hotelType
+                  const startPrice = h.roomTypes.length > 0
+                    ? Math.min(...h.roomTypes.map((rt) => Number(rt.pricePerNight)))
+                    : null
+                  const totalRooms = h.roomTypes.reduce((s, rt) => s + rt.totalInventory, 0)
+                  const maxGuests = h.roomTypes.length > 0
+                    ? Math.max(...h.roomTypes.map((rt) => rt.maxGuests))
+                    : null
+                  return (
+                    <Link
+                      key={h.id}
+                      href={`/hotel/${slug}/${h.code}`}
+                      className="group overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:ring-brand-300"
+                    >
+                      <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-brand-100 to-brand-300">
+                        {h.images[0]?.url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={h.images[0].url} alt={name} className="size-full object-cover transition-transform group-hover:scale-105" />
+                        ) : (
+                          <div className="flex size-full items-center justify-center text-5xl text-white/70">
+                            <Icon name="bed" />
+                          </div>
+                        )}
+                        <div className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur">
+                          <Icon name="bed" className="size-3 text-brand-600" /> {typeLabel}
+                        </div>
+                        <div className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/90 px-2.5 py-1 text-xs font-medium text-white shadow-sm backdrop-blur">
+                          <Icon name="check" className="size-3" /> เปิดจอง
+                        </div>
+                      </div>
+                      <div className="p-5">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="line-clamp-1 text-base font-semibold text-gray-900">{name}</h3>
+                          <Badge variant="default" className="shrink-0">{h._count.roomTypes} ประเภทห้อง</Badge>
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-600">
+                          <span className="flex items-center gap-1"><Icon name="bed" className="size-3 text-gray-400" /> {totalRooms} ห้อง</span>
+                          {maxGuests && (
+                            <span className="flex items-center gap-1"><Icon name="users" className="size-3 text-gray-400" /> สูงสุด {maxGuests} ท่าน/ห้อง</span>
+                          )}
+                        </div>
+                        {startPrice !== null && (
+                          <div className="mt-3 text-sm text-gray-700">
+                            เริ่มต้น <span className="text-base font-bold text-brand-700">฿{startPrice.toLocaleString('th-TH')}</span>
+                            <span className="text-xs text-gray-500">/คืน</span>
+                          </div>
+                        )}
+                        <div className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 transition-all group-hover:gap-2.5">
+                          ดู &amp; จอง
+                          <Icon name="chevronRight" className="size-3" />
+                        </div>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Empty state — no villa AND no hotel */}
+        {totalCount === 0 && (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center">
             <Icon name="beach" className="mb-3 text-4xl text-gray-300" />
             <p className="text-sm text-gray-500">ยังไม่มีที่พักเปิดให้บริการในขณะนี้</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center">
-            <Icon name="search" className="mb-3 text-4xl text-gray-300" />
-            <p className="text-sm text-gray-500">ไม่พบที่พักตามเงื่อนไข — ลองปรับตัวกรอง</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((p) => {
-              const name = (p.name as { th?: string })?.th ?? p.code
-              const cover = p.images[0]?.url
-              const variant = p.variants[0]
-              const hasPool = p.pools.length > 0
-              return (
-                <Link
-                  key={p.id}
-                  href={`/sale/${slug}/${p.code}`}
-                  className="group overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:ring-brand-300"
-                >
-                  <div className="relative aspect-[4/3] bg-gradient-to-br from-gray-100 to-gray-200">
-                    {cover ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={cover}
-                        alt={name}
-                        className="size-full object-cover transition-transform group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="flex size-full items-center justify-center text-5xl text-gray-300">
-                        <Icon name="home" />
-                      </div>
-                    )}
-                    {p.location?.location && (
-                      <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur">
-                        <Icon name="pin" className="size-3 text-brand-600" />
-                        {p.location.location.name}
-                      </div>
-                    )}
-                    {hasPool && (
-                      <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-blue-500/90 px-2.5 py-1 text-xs font-medium text-white shadow-sm backdrop-blur">
-                        <Icon name="water" className="size-3" /> มีสระ
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-5">
-                    <h3 className="text-base font-semibold text-gray-900">{name}</h3>
-                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-600">
-                      <span className="flex items-center gap-1">
-                        <Icon name="bed" className="size-3 text-gray-400" /> {p.totalBedrooms} ห้องนอน
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Icon name="bath" className="size-3 text-gray-400" /> {p.totalBathrooms} ห้องน้ำ
-                      </span>
-                      {variant && (
-                        <span className="flex items-center gap-1">
-                          <Icon name="users" className="size-3 text-gray-400" /> {variant.maxGuests} ท่าน
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 transition-all group-hover:gap-2.5">
-                      ดูรายละเอียดและจอง
-                      <Icon name="chevronRight" className="size-3" />
-                    </div>
-                  </div>
-                </Link>
-              )
-            })}
           </div>
         )}
       </main>

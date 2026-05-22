@@ -10,9 +10,11 @@ const baseInput = {
   variantId: z.string(),
   checkin: isoDate,
   checkout: isoDate,
-  customerName: z.string().min(1),
+  // Customer + booker names are optional on quick / pending — the UI shows them with no
+  // asterisk and the service substitutes a fallback ("— ไม่ระบุชื่อ —") if blank.
+  customerName: z.string().min(1).default('— ไม่ระบุชื่อ —'),
   customerPhone: z.string().optional(),
-  bookerName: z.string().min(1),
+  bookerName: z.string().optional(),
   guestCount: z.number().int().min(1),
   total: z.number().nonnegative(),
   publicNote: z.string().optional(),

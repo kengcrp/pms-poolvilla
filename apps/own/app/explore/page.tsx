@@ -13,27 +13,51 @@ const PROP_TYPE_LABEL: Record<string, string> = {
   BNB: 'B&B',
 }
 
+type Tab = 'villa' | 'hotel'
+
 export default function ExplorePage() {
+  const [tab, setTab] = useState<Tab>('villa')
+
   const [search, setSearch] = useState('')
   const [locationId, setLocationId] = useState('')
   const [zoneId, setZoneId] = useState('')
   const [minBed, setMinBed] = useState(0)
-  const [propertyType, setPropertyType] = useState<'' | 'POOL_VILLA' | 'LOFT' | 'BNB'>('')
+  const [propertyType, setPropertyType] = useState<string>('')
   const [hasPool, setHasPool] = useState(false)
   const [sort, setSort] = useState<Sort>('newest')
 
+  // Hotel tab state
+  const [hotelSearch, setHotelSearch] = useState('')
+  const [hotelTypeFilter, setHotelTypeFilter] = useState<string>('')
+
   const { data: locations } = trpc.public.locations.useQuery()
-  const { data, isPending } = trpc.public.exploreAll.useQuery({
-    search: search.trim() || undefined,
-    locationId: locationId || undefined,
-    zoneId: zoneId || undefined,
-    minBed: minBed || undefined,
-    propertyType: propertyType || undefined,
-    hasPool: hasPool || undefined,
-    sort,
-    limit: 24,
-    offset: 0,
-  })
+  const { data: types } = trpc.property.types.useQuery()
+  const { data, isPending } = trpc.public.exploreAll.useQuery(
+    {
+      search: search.trim() || undefined,
+      locationId: locationId || undefined,
+      zoneId: zoneId || undefined,
+      minBed: minBed || undefined,
+      propertyType: propertyType || undefined,
+      hasPool: hasPool || undefined,
+      sort,
+      limit: 24,
+      offset: 0,
+    },
+    { enabled: tab === 'villa' },
+  )
+
+  const { data: hotelData, isPending: hotelLoading } = trpc.public.hotelsExplore.useQuery(
+    {
+      search: hotelSearch.trim() || undefined,
+      hotelType: hotelTypeFilter || undefined,
+      sort: 'newest',
+      limit: 24,
+      offset: 0,
+    },
+    { enabled: tab === 'hotel' },
+  )
+  const { data: hotelTypes } = trpc.public.hotelTypes.useQuery(undefined, { enabled: tab === 'hotel' })
 
   const zonesOfLocation = useMemo(
     () => locations?.find((l) => l.id === locationId)?.zones ?? [],
@@ -71,6 +95,119 @@ export default function ExplorePage() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-8">
+        {/* Tab switcher */}
+        <div className="mb-5 inline-flex rounded-xl bg-gray-100 p-1">
+          <button
+            type="button"
+            onClick={() => setTab('villa')}
+            className={cn(
+              'rounded-lg px-4 py-2 text-sm font-medium transition-all',
+              tab === 'villa' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-600 hover:text-gray-900',
+            )}
+          >
+            <Icon name="home" className="mr-1.5 size-3.5" />
+            พูลวิลล่า / ที่พัก
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('hotel')}
+            className={cn(
+              'rounded-lg px-4 py-2 text-sm font-medium transition-all',
+              tab === 'hotel' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-600 hover:text-gray-900',
+            )}
+          >
+            <Icon name="bed" className="mr-1.5 size-3.5" />
+            โรงแรม
+          </button>
+        </div>
+
+        {tab === 'hotel' && (
+          <>
+            <Card className="mb-6 p-4">
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+                <div className="lg:col-span-7">
+                  <div className="relative">
+                    <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+                    <Input
+                      placeholder="ค้นหาชื่อโรงแรม / code..."
+                      className="pl-9"
+                      value={hotelSearch}
+                      onChange={(e) => setHotelSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="lg:col-span-5">
+                  <Select value={hotelTypeFilter} onChange={(e) => setHotelTypeFilter(e.target.value)}>
+                    <option value="">ทุกประเภทโรงแรม</option>
+                    {(hotelTypes ?? []).map((t) => (
+                      <option key={t.code} value={t.code}>{t.nameTh}</option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+              <div className="mt-3 border-t border-gray-100 pt-3 text-xs text-gray-500">
+                {hotelLoading ? 'กำลังโหลด...' : `พบ ${hotelData?.total ?? 0} โรงแรม`}
+              </div>
+            </Card>
+
+            {hotelLoading ? (
+              <div className="text-center text-sm text-gray-500">กำลังโหลด...</div>
+            ) : !hotelData?.items.length ? (
+              <Card className="flex flex-col items-center p-12 text-center">
+                <Icon name="bed" className="mb-3 text-4xl text-gray-300" />
+                <p className="text-sm text-gray-500">
+                  {hotelSearch || hotelTypeFilter ? 'ไม่พบโรงแรมตามเงื่อนไข' : 'ยังไม่มีโรงแรมในระบบ'}
+                </p>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {hotelData.items.map((h) => {
+                  const name = (h.name as { th?: string })?.th ?? h.code
+                  const typeLabel = (hotelTypes ?? []).find((t) => t.code === h.hotelType)?.nameTh ?? h.hotelType
+                  const startPrice = h.roomTypes[0] ? Number(h.roomTypes[0].pricePerNight) : null
+                  const href = h.owner.saleSlug ? `/hotel/${h.owner.saleSlug}/${h.code}` : '#'
+                  return (
+                    <Link key={h.id} href={href}
+                      className="group overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:ring-brand-300">
+                      <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-brand-100 to-brand-200">
+                        {h.images[0]?.url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={h.images[0].url} alt={name} className="size-full object-cover transition-transform group-hover:scale-105" />
+                        ) : (
+                          <div className="flex size-full items-center justify-center text-5xl text-brand-400">
+                            <Icon name="bed" />
+                          </div>
+                        )}
+                        <div className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur">
+                          <Icon name="bed" className="size-3 text-brand-600" /> {typeLabel}
+                        </div>
+                      </div>
+                      <div className="p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="line-clamp-1 text-base font-semibold text-gray-900">{name}</h3>
+                          <Badge variant="default" className="shrink-0">{h._count.roomTypes} ประเภทห้อง</Badge>
+                        </div>
+                        <div className="mt-1 text-xs text-gray-500">โดย {h.owner.name}</div>
+                        {startPrice !== null && (
+                          <div className="mt-3 text-sm text-gray-700">
+                            เริ่มต้น <span className="text-base font-bold text-brand-700">฿{startPrice.toLocaleString('th-TH')}</span>
+                            <span className="text-xs text-gray-500">/คืน</span>
+                          </div>
+                        )}
+                        <div className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 transition-all group-hover:gap-2.5">
+                          ดู &amp; จอง
+                          <Icon name="chevronRight" className="size-3" />
+                        </div>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === 'villa' && (<>
         {/* Filter bar */}
         <Card className="mb-6 p-4">
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
@@ -131,14 +268,14 @@ export default function ExplorePage() {
             <div className="lg:col-span-2">
               <Select
                 value={propertyType}
-                onChange={(e) =>
-                  setPropertyType(e.target.value as '' | 'POOL_VILLA' | 'LOFT' | 'BNB')
-                }
+                onChange={(e) => setPropertyType(e.target.value)}
               >
                 <option value="">ทุกประเภท</option>
-                <option value="POOL_VILLA">พูลวิลล่า</option>
-                <option value="LOFT">ลอฟ</option>
-                <option value="BNB">B&B</option>
+                {types?.map((t) => (
+                  <option key={t.code} value={t.code}>
+                    {t.nameTh}
+                  </option>
+                ))}
               </Select>
             </div>
             <div className="lg:col-span-1">
@@ -267,6 +404,7 @@ export default function ExplorePage() {
             })}
           </div>
         )}
+        </>)}
       </main>
 
       <footer className="mt-16 border-t border-gray-200 bg-white py-6">

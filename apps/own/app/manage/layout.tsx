@@ -1,7 +1,16 @@
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { auth, signOut } from '@/auth'
 import { TRPCProvider } from '@/lib/trpc'
 import { ManageShell } from '@/components/ManageShell'
+
+export const metadata: Metadata = {
+  title: {
+    default: 'Owner Manager',
+    template: '%s | Owner Manager',
+  },
+  description: 'ระบบจัดการที่พัก/โรงแรมสำหรับเจ้าของ',
+}
 
 export default async function ManageLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()

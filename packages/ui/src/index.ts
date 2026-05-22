@@ -1,6 +1,7 @@
 export { cn } from './cn'
 export { Button, type ButtonProps } from './components/Button'
 export { Input } from './components/Input'
+export { NumberInput } from './components/NumberInput'
 export { Textarea } from './components/Textarea'
 export { Label } from './components/Label'
 export { Select } from './components/Select'

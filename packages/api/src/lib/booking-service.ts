@@ -22,7 +22,7 @@ interface CreateBookingBase extends DateRangeInput {
   ownerId: string
   customerName: string
   customerPhone?: string
-  bookerName: string
+  bookerName?: string
   guestCount: number
   total: number
   publicNote?: string
@@ -79,22 +79,62 @@ async function assertVariantOwn(tx: Tx, variantId: string, ownerId: string) {
   return v
 }
 
-/** Check that none of the nights are already booked / pending / under maintenance. */
+/**
+ * Enforce the property's booking window. Owners can set how far ahead guests may book
+ * (e.g. 3/6/12 months). Dates beyond `today + bookingWindowMonths` are rejected because
+ * the owner hasn't extended pricing/availability that far yet.
+ */
+async function assertWithinBookingWindow(tx: Tx, variantId: string, nights: Date[]) {
+  if (nights.length === 0) return
+  const variant = await tx.propertyVariant.findUniqueOrThrow({
+    where: { id: variantId },
+    select: { property: { select: { bookingWindowMonths: true } } },
+  })
+  const months = variant.property.bookingWindowMonths
+  if (months == null) return // No window configured — allow
+  const maxDate = new Date()
+  maxDate.setUTCMonth(maxDate.getUTCMonth() + months)
+  const maxDateOnly = new Date(Date.UTC(maxDate.getUTCFullYear(), maxDate.getUTCMonth(), maxDate.getUTCDate()))
+  const offenders = nights.filter((d) => d.getTime() > maxDateOnly.getTime())
+  if (offenders.length > 0) {
+    const first = offenders[0]!.toISOString().slice(0, 10)
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: `วันที่ ${first} อยู่นอกช่วงที่เปิดจอง (เปิดจองล่วงหน้าได้ ${months} เดือน) — เจ้าของยังไม่ได้ตั้งราคาในช่วงนั้น`,
+    })
+  }
+}
+
+/**
+ * Check that none of the nights are already booked / pending / under maintenance.
+ * Includes SIBLING variants of the same property — split variants and "เหมาหลัง"
+ * share physical bedrooms, so a hold on any one variant locks the others on that date.
+ */
 async function assertNoConflict(tx: Tx, variantId: string, nights: Date[]) {
   if (nights.length === 0) return
+
+  const variant = await tx.propertyVariant.findUniqueOrThrow({
+    where: { id: variantId },
+    select: { propertyId: true },
+  })
+
   const conflicts = await tx.variantCalendar.findMany({
     where: {
-      variantId,
+      variant: { propertyId: variant.propertyId },
       date: { in: nights },
       status: { in: ['BOOKED', 'PENDING_PAYMENT', 'UNDER_MAINTENANCE'] },
     },
-    select: { date: true, status: true },
+    select: { date: true, status: true, variantId: true },
   })
   if (conflicts.length) {
-    const firstDate = conflicts[0]!.date.toISOString().slice(0, 10)
+    const first = conflicts[0]!
+    const firstDate = first.date.toISOString().slice(0, 10)
+    const fromSibling = first.variantId !== variantId
     throw new TRPCError({
       code: 'CONFLICT',
-      message: `มีการจอง/บล็อกในช่วงวันที่เลือกแล้ว (${firstDate})`,
+      message: fromSibling
+        ? `วันที่ ${firstDate} ถูกล็อกเพราะมีการจองในรูปแบบห้องอื่นของที่พักเดียวกัน`
+        : `มีการจอง/บล็อกในช่วงวันที่เลือกแล้ว (${firstDate})`,
     })
   }
 }
@@ -145,6 +185,7 @@ export const BookingService = {
       const v = await assertVariantOwn(tx, input.variantId, input.ownerId)
       const nights = nightDays(input.checkin, input.checkout)
       await assertNoConflict(tx, input.variantId, nights)
+      await assertWithinBookingWindow(tx, input.variantId, nights)
       if (input.couponId) await consumeCoupon(tx, input.couponId, input.ownerId)
       const booking = await tx.booking.create({
         data: {
@@ -152,7 +193,7 @@ export const BookingService = {
           propertyId: v.propertyId,
           customerName: input.customerName,
           customerPhone: input.customerPhone,
-          bookerName: input.bookerName,
+          bookerName: input.bookerName || input.customerName,
           guestCount: input.guestCount,
           checkin: toDateOnly(new Date(input.checkin)),
           checkout: toDateOnly(new Date(input.checkout)),
@@ -175,6 +216,7 @@ export const BookingService = {
       const v = await assertVariantOwn(tx, input.variantId, input.ownerId)
       const nights = nightDays(input.checkin, input.checkout)
       await assertNoConflict(tx, input.variantId, nights)
+      await assertWithinBookingWindow(tx, input.variantId, nights)
       if (input.couponId) await consumeCoupon(tx, input.couponId, input.ownerId)
       const booking = await tx.booking.create({
         data: {
@@ -182,7 +224,7 @@ export const BookingService = {
           propertyId: v.propertyId,
           customerName: input.customerName,
           customerPhone: input.customerPhone,
-          bookerName: input.bookerName,
+          bookerName: input.bookerName || input.customerName,
           guestCount: input.guestCount,
           checkin: toDateOnly(new Date(input.checkin)),
           checkout: toDateOnly(new Date(input.checkout)),
@@ -207,6 +249,7 @@ export const BookingService = {
       const v = await assertVariantOwn(tx, input.variantId, input.ownerId)
       const nights = nightDays(input.checkin, input.checkout)
       await assertNoConflict(tx, input.variantId, nights)
+      await assertWithinBookingWindow(tx, input.variantId, nights)
       if (input.couponId) await consumeCoupon(tx, input.couponId, input.ownerId)
       const booking = await tx.booking.create({
         data: {
@@ -214,7 +257,7 @@ export const BookingService = {
           propertyId: v.propertyId,
           customerName: input.customerName,
           customerPhone: input.customerPhone,
-          bookerName: input.bookerName,
+          bookerName: input.bookerName || input.customerName,
           guestCount: input.guestCount,
           checkin: toDateOnly(new Date(input.checkin)),
           checkout: toDateOnly(new Date(input.checkout)),
@@ -242,6 +285,7 @@ export const BookingService = {
       await assertVariantOwn(tx, input.variantId, input.ownerId)
       const nights = nightDays(input.checkin, input.checkout)
       await assertNoConflict(tx, input.variantId, nights)
+      await assertWithinBookingWindow(tx, input.variantId, nights)
       await syncCalendar(tx, input.variantId, nights, 'UNDER_MAINTENANCE', null, input.note ?? null)
       return { ok: true, count: nights.length }
     })

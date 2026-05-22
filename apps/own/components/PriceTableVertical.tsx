@@ -8,6 +8,9 @@ import { formatMonthLabel, ymd } from '@/lib/date'
 interface Props {
   propertyId: string
   onCellClick?: (variantId: string, date: Date) => void
+  /** Controlled "ราคาขาย / ส่ง Agent" mode. When provided, the internal toggle UI is hidden
+   *  so the caller (e.g. pricing page) can render the toggle in its own header slot. */
+  priceMode?: 'sell' | 'agent'
 }
 
 const DOW_FULL = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'] as const
@@ -16,13 +19,16 @@ const DOW_FULL = ['อาทิตย์', 'จันทร์', 'อังค�
  * Layout 2 — Days as rows, variants (เหมาหลัง + แบ่งห้องนอน) as columns.
  * Mirrors Runblook's "รูปแบบ 2".
  */
-export function PriceTableVertical({ propertyId, onCellClick }: Props) {
+export function PriceTableVertical({ propertyId, onCellClick, priceMode: controlledMode }: Props) {
   const today = useMemo(() => {
     const d = new Date()
     return { year: d.getUTCFullYear(), month0: d.getUTCMonth() }
   }, [])
   const [view, setView] = useState(today)
-  const [priceMode, setPriceMode] = useState<'sell' | 'agent'>('sell')
+  const [internalMode, setInternalMode] = useState<'sell' | 'agent'>('sell')
+  const isControlled = controlledMode !== undefined
+  const priceMode = controlledMode ?? internalMode
+  const setPriceMode = setInternalMode
 
   const from = new Date(Date.UTC(view.year, view.month0, 1))
   const to = new Date(Date.UTC(view.year, view.month0 + 1, 0))
@@ -61,34 +67,36 @@ export function PriceTableVertical({ propertyId, onCellClick }: Props) {
 
   return (
     <div>
-      {/* ราคาขาย / ส่ง Agent toggle */}
-      <div className="mb-3 inline-flex rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
-        <button
-          type="button"
-          onClick={() => setPriceMode('sell')}
-          className={cn(
-            'rounded-lg px-4 py-1.5 text-sm font-semibold transition-all',
-            priceMode === 'sell'
-              ? 'bg-brand-50 text-brand-700'
-              : 'text-gray-500 hover:text-gray-700',
-          )}
-        >
-          ราคาขาย
-        </button>
-        <button
-          type="button"
-          onClick={() => setPriceMode('agent')}
-          className={cn(
-            'rounded-lg px-4 py-1.5 text-sm font-semibold transition-all',
-            priceMode === 'agent'
-              ? 'bg-brand-50 text-brand-700'
-              : 'text-gray-500 hover:text-gray-700',
-          )}
-          title="ราคาสำหรับ Agent (ฟีเจอร์เต็มอยู่ใน roadmap)"
-        >
-          ส่ง Agent
-        </button>
-      </div>
+      {/* ราคาขาย / ส่ง Agent toggle — hidden when the caller owns the price-mode state */}
+      {!isControlled && (
+        <div className="mb-3 inline-flex rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setPriceMode('sell')}
+            className={cn(
+              'rounded-lg px-4 py-1.5 text-sm font-semibold transition-all',
+              priceMode === 'sell'
+                ? 'bg-brand-50 text-brand-700'
+                : 'text-gray-500 hover:text-gray-700',
+            )}
+          >
+            ราคาขาย
+          </button>
+          <button
+            type="button"
+            onClick={() => setPriceMode('agent')}
+            className={cn(
+              'rounded-lg px-4 py-1.5 text-sm font-semibold transition-all',
+              priceMode === 'agent'
+                ? 'bg-brand-50 text-brand-700'
+                : 'text-gray-500 hover:text-gray-700',
+            )}
+            title="ราคาสำหรับ Agent (ฟีเจอร์เต็มอยู่ใน roadmap)"
+          >
+            ส่ง Agent
+          </button>
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
         <div className="overflow-x-auto">
@@ -142,19 +150,28 @@ export function PriceTableVertical({ propertyId, onCellClick }: Props) {
                 const key = ymd(d)
                 const isToday = key === todayKey
                 const dow = d.getUTCDay()
-                const isWeekend = dow === 0 || dow === 6
+                const isSunday = dow === 0
+                const isSaturday = dow === 6
+                const isWeekend = isSunday || isSaturday
                 return (
                   <tr
                     key={key}
                     className={cn(
                       'border-b border-gray-100 last:border-b-0',
-                      isToday && 'bg-brand-50/40',
+                      // Highlight weekend rows with a light blue tint (Sunday darker than Saturday)
+                      isSunday && 'bg-sky-100/80',
+                      isSaturday && !isSunday && 'bg-sky-50/70',
+                      isToday && !isWeekend && 'bg-brand-50/40',
                     )}
                   >
                     <td
                       className={cn(
                         'w-12 border-r border-gray-200 px-2 py-2 text-center text-sm',
-                        isToday ? 'font-semibold text-brand-700' : 'text-gray-600',
+                        isToday
+                          ? 'font-semibold text-brand-700'
+                          : isSunday
+                            ? 'font-semibold text-sky-900'
+                            : 'text-gray-600',
                       )}
                     >
                       {i + 1}
@@ -163,7 +180,11 @@ export function PriceTableVertical({ propertyId, onCellClick }: Props) {
                       className={cn(
                         'w-28 border-r border-gray-200 px-3 py-2 text-sm',
                         isWeekend && 'font-medium',
-                        isToday ? 'text-brand-700' : 'text-gray-700',
+                        isToday
+                          ? 'text-brand-700'
+                          : isSunday
+                            ? 'text-sky-900 font-semibold'
+                            : 'text-gray-700',
                       )}
                     >
                       {DOW_FULL[dow]}
@@ -183,29 +204,49 @@ export function PriceTableVertical({ propertyId, onCellClick }: Props) {
                       const status = day.status
                       const priceType = day.priceType
 
+                      // Resolve "effective" hold info — sibling-locked cells get treated like own holds
+                      // but rendered with opacity + lock icon so the source is visually distinct.
+                      const fromSibling = status === 'OPEN' && day.lockedBySibling
+                      const effectiveStatus = fromSibling ? day.siblingStatus : status
+                      const effectiveCustomerName = fromSibling ? day.siblingCustomerName : day.customerName
+                      const effectiveNote = fromSibling ? day.siblingNote : day.note
+
                       if (
-                        status === 'BOOKED' ||
-                        status === 'PENDING_PAYMENT' ||
-                        status === 'UNDER_MAINTENANCE'
+                        effectiveStatus === 'BOOKED' ||
+                        effectiveStatus === 'PENDING_PAYMENT' ||
+                        effectiveStatus === 'UNDER_MAINTENANCE'
                       ) {
                         const bg =
-                          status === 'BOOKED'
+                          effectiveStatus === 'BOOKED'
                             ? 'bg-red-500 hover:bg-red-600'
-                            : status === 'PENDING_PAYMENT'
+                            : effectiveStatus === 'PENDING_PAYMENT'
                               ? 'bg-amber-400 hover:bg-amber-500'
                               : 'bg-gray-400 hover:bg-gray-500'
-                        const label = status === 'UNDER_MAINTENANCE' ? 'ปิดซ่อม' : ''
+                        const label =
+                          effectiveStatus === 'UNDER_MAINTENANCE'
+                            ? (effectiveNote ?? 'ปิดซ่อม')
+                            : (effectiveCustomerName ?? '—')
+                        const tooltip =
+                          (fromSibling ? '🔒 (รูปแบบห้องอื่น) ' : '') +
+                          (effectiveStatus === 'BOOKED'
+                            ? `จองโดย ${label}`
+                            : effectiveStatus === 'PENDING_PAYMENT'
+                              ? `รอชำระ — ${label}`
+                              : `ปิดซ่อม${effectiveNote ? ` — ${effectiveNote}` : ''}`)
                         return (
                           <td key={v.variant.id} className="border-l border-gray-200 p-1.5">
                             <button
                               type="button"
                               onClick={() => onCellClick?.(v.variant.id, new Date(day.date))}
+                              title={tooltip}
                               className={cn(
-                                'flex h-8 w-full items-center justify-center rounded-md text-xs font-medium text-white transition-colors',
+                                'flex h-8 w-full items-center justify-center gap-1 rounded-md px-2 text-xs font-medium text-white transition-colors',
                                 bg,
+                                fromSibling && 'opacity-70',
                               )}
                             >
-                              {label}
+                              {fromSibling && <Icon name="lock" className="size-3 shrink-0" />}
+                              <span className="min-w-0 truncate">{label}</span>
                             </button>
                           </td>
                         )
@@ -218,6 +259,19 @@ export function PriceTableVertical({ propertyId, onCellClick }: Props) {
                             ? 'text-emerald-700 font-semibold'
                             : 'text-gray-700'
 
+                      // Pick price based on toggle — agentPrice null shows lock icon instead of "฿0".
+                      // Also coerce NaN/undefined to null so we never render "฿NaN".
+                      const rawDisplayed =
+                        priceMode === 'agent'
+                          ? day.agentPrice
+                          : day.price
+                      const numericPrice =
+                        typeof rawDisplayed === 'number' && Number.isFinite(rawDisplayed)
+                          ? rawDisplayed
+                          : null
+                      // Split variant + weekly Lock for this DOW → no sale on this day → lock icon
+                      const splitLocked = !v.variant.isDefault && day.splitOpen === false
+                      const displayed = splitLocked ? null : numericPrice
                       return (
                         <td
                           key={v.variant.id}
@@ -231,7 +285,13 @@ export function PriceTableVertical({ propertyId, onCellClick }: Props) {
                               textColor,
                             )}
                           >
-                            ฿{day.price.toLocaleString()}
+                            {displayed === null ? (
+                              <span className="inline-flex items-center justify-center text-gray-400" title="ยังไม่ได้ตั้งราคา / ปิดการขาย">
+                                <Icon name="lock" className="size-3.5" />
+                              </span>
+                            ) : (
+                              <>฿{displayed.toLocaleString()}</>
+                            )}
                           </button>
                         </td>
                       )

@@ -3,6 +3,8 @@ import { TRPCError } from '@trpc/server'
 import { prisma, Prisma } from '@pms/db'
 import { router, publicProcedure } from '../trpc'
 import { BookingService } from '../lib/booking-service'
+import { HotelBookingService } from '../lib/hotel-booking-service'
+import { getAvailabilityByHotel } from '../lib/hotel-availability'
 import { getCalendarRange } from '../lib/calendar'
 import { calcCouponDiscount } from '../schemas/coupon'
 
@@ -30,7 +32,7 @@ export const publicRouter = router({
         zoneId: z.string().optional(),
         minBed: z.number().int().min(0).optional(),
         hasPool: z.boolean().optional(),
-        propertyType: z.enum(['POOL_VILLA', 'LOFT', 'BNB']).optional(),
+        propertyType: z.string().optional(),
         sort: z.enum(['newest', 'bedroomDesc', 'bedroomAsc']).default('newest'),
         limit: z.number().int().min(1).max(60).default(24),
         offset: z.number().int().min(0).default(0),
@@ -87,7 +89,7 @@ export const publicRouter = router({
       return { items: filtered, total, limit, offset }
     }),
 
-  /** Get owner + their active properties by sale slug. */
+  /** Get owner + their active properties AND hotels by sale slug. */
   ownerBySlug: publicProcedure
     .input(z.object({ slug: z.string().min(1) }))
     .query(async ({ input }) => {
@@ -102,23 +104,43 @@ export const publicRouter = router({
       })
       if (!owner) throw new TRPCError({ code: 'NOT_FOUND', message: 'ไม่พบหน้าร้าน' })
 
-      const properties = await prisma.property.findMany({
-        where: {
-          ownerId: owner.id,
-          deletedAt: null,
-          isActive: true,
-          reviewStatus: 'ACTIVE',
-        },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          location: { include: { location: true, zone: true } },
-          images: { where: { type: 'cover' }, take: 1 },
-          variants: { where: { isDefault: true }, take: 1 },
-          pools: true,
-        },
-      })
+      const [properties, hotels] = await Promise.all([
+        prisma.property.findMany({
+          where: {
+            ownerId: owner.id,
+            deletedAt: null,
+            isActive: true,
+            reviewStatus: 'ACTIVE',
+          },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            location: { include: { location: true, zone: true } },
+            images: { where: { type: 'cover' }, take: 1 },
+            variants: { where: { isDefault: true }, take: 1 },
+            pools: true,
+          },
+        }),
+        prisma.hotel.findMany({
+          where: {
+            ownerId: owner.id,
+            deletedAt: null,
+            isActive: true,
+            reviewStatus: 'ACTIVE',
+          },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            images: { where: { type: 'cover' }, take: 1 },
+            roomTypes: {
+              where: { isActive: true },
+              orderBy: { sortOrder: 'asc' },
+              select: { pricePerNight: true, totalInventory: true, maxGuests: true },
+            },
+            _count: { select: { roomTypes: { where: { isActive: true } } } },
+          },
+        }),
+      ])
 
-      return { owner, properties }
+      return { owner, properties, hotels }
     }),
 
   /** Get property detail (by owner slug + property code). */
@@ -293,5 +315,198 @@ export const publicRouter = router({
       })
 
       return { ok: true, bookingId: booking.id, total: finalTotal, originalTotal: nightTotal }
+    }),
+
+  // ─────────────────────────────────────────────────────────
+  // Hotel (count-based inventory) — public endpoints
+  // ─────────────────────────────────────────────────────────
+
+  /** Marketplace: list active hotels (with filters) */
+  hotelsExplore: publicProcedure
+    .input(
+      z.object({
+        search: z.string().optional(),
+        hotelType: z.string().optional(),
+        sort: z.enum(['newest', 'nameAsc']).default('newest'),
+        limit: z.number().int().min(1).max(60).default(24),
+        offset: z.number().int().min(0).default(0),
+      }),
+    )
+    .query(async ({ input }) => {
+      const f = input
+      const search = f.search?.trim()
+      const where: Prisma.HotelWhereInput = {
+        deletedAt: null,
+        isActive: true,
+        reviewStatus: 'ACTIVE',
+        owner: { saleSlug: { not: null } },
+        ...(f.hotelType && { hotelType: f.hotelType }),
+      }
+      const orderBy: Prisma.HotelOrderByWithRelationInput =
+        f.sort === 'nameAsc' ? { createdAt: 'desc' } : { createdAt: 'desc' }
+
+      const [items, total] = await Promise.all([
+        prisma.hotel.findMany({
+          where,
+          orderBy,
+          take: f.limit,
+          skip: f.offset,
+          include: {
+            owner: { select: { id: true, name: true, saleSlug: true } },
+            images: { where: { type: 'cover' }, take: 1 },
+            roomTypes: {
+              where: { isActive: true },
+              orderBy: { sortOrder: 'asc' },
+              take: 1,
+              select: { pricePerNight: true, totalInventory: true },
+            },
+            _count: { select: { roomTypes: { where: { isActive: true } } } },
+          },
+        }),
+        prisma.hotel.count({ where }),
+      ])
+
+      const filtered = search
+        ? items.filter((h) => {
+            const name = (h.name as { th?: string })?.th?.toLowerCase() ?? ''
+            return name.includes(search.toLowerCase()) || h.code.toLowerCase().includes(search.toLowerCase())
+          })
+        : items
+      return { items: filtered, total, limit: f.limit, offset: f.offset }
+    }),
+
+  /** Active hotel types — public filter dropdown */
+  hotelTypes: publicProcedure.query(() =>
+    prisma.hotelTypeMaster.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { nameTh: 'asc' }],
+      select: { code: true, nameTh: true, iconRef: true },
+    }),
+  ),
+
+  /** Hotel detail by owner slug + hotel code (sale page) */
+  hotelByCode: publicProcedure
+    .input(z.object({ slug: z.string(), code: z.string() }))
+    .query(async ({ input }) => {
+      const hotel = await prisma.hotel.findFirst({
+        where: {
+          code: input.code,
+          deletedAt: null,
+          isActive: true,
+          reviewStatus: 'ACTIVE',
+          owner: { saleSlug: input.slug },
+        },
+        include: {
+          owner: { select: { id: true, name: true, phone: true, saleSlug: true } },
+          images: { orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }] },
+          roomTypes: {
+            where: { isActive: true },
+            orderBy: { sortOrder: 'asc' },
+            include: { images: { orderBy: { sortOrder: 'asc' } } },
+          },
+        },
+      })
+      if (!hotel) throw new TRPCError({ code: 'NOT_FOUND', message: 'ไม่พบโรงแรม' })
+      return hotel
+    }),
+
+  /** Per-day availability for all room types of a hotel */
+  hotelAvailability: publicProcedure
+    .input(
+      z.object({
+        slug: z.string(),
+        code: z.string(),
+        from: isoDate,
+        to: isoDate,
+      }),
+    )
+    .query(async ({ input }) => {
+      // Resolve hotel + verify ownership via slug
+      const hotel = await prisma.hotel.findFirst({
+        where: {
+          code: input.code,
+          deletedAt: null,
+          isActive: true,
+          reviewStatus: 'ACTIVE',
+          owner: { saleSlug: input.slug },
+        },
+        select: { id: true },
+      })
+      if (!hotel) throw new TRPCError({ code: 'NOT_FOUND' })
+      return getAvailabilityByHotel(hotel.id, new Date(input.from), new Date(input.to))
+    }),
+
+  /** Public hotel booking — creates PENDING booking */
+  submitHotelBooking: publicProcedure
+    .input(
+      z.object({
+        slug: z.string(),
+        code: z.string(),
+        checkin: isoDate,
+        checkout: isoDate,
+        customerName: z.string().min(1).max(120),
+        customerPhone: z.string().min(1).max(40),
+        customerEmail: z.string().email().optional(),
+        guestCount: z.number().int().min(1).max(50),
+        lines: z
+          .array(z.object({ roomTypeId: z.string(), roomsReserved: z.number().int().min(1) }))
+          .min(1),
+        message: z.string().max(500).optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      // Verify hotel + scope by slug
+      const hotel = await prisma.hotel.findFirst({
+        where: {
+          code: input.code,
+          deletedAt: null,
+          isActive: true,
+          reviewStatus: 'ACTIVE',
+          owner: { saleSlug: input.slug },
+        },
+        select: { id: true },
+      })
+      if (!hotel) throw new TRPCError({ code: 'NOT_FOUND', message: 'ไม่พบโรงแรม' })
+
+      const booking = await HotelBookingService.create({
+        hotelId: hotel.id,
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        customerEmail: input.customerEmail,
+        guestCount: input.guestCount,
+        checkin: new Date(input.checkin),
+        checkout: new Date(input.checkout),
+        lines: input.lines,
+        source: 'PUBLIC_SALE_PAGE',
+        publicNote: input.message,
+      })
+
+      return {
+        ok: true,
+        bookingId: booking.id,
+        code: booking.code,
+        total: Number(booking.totalAmount),
+      }
+    }),
+
+  /** Read a single hotel booking (for confirmation page) — limited fields */
+  hotelBookingByCode: publicProcedure
+    .input(z.object({ slug: z.string(), bookingCode: z.string() }))
+    .query(async ({ input }) => {
+      const booking = await prisma.hotelBooking.findFirst({
+        where: {
+          code: input.bookingCode,
+          deletedAt: null,
+          hotel: {
+            owner: { saleSlug: input.slug },
+          },
+        },
+        include: {
+          hotel: { select: { name: true, code: true, phone: true, address: true, owner: { select: { name: true, saleSlug: true } } } },
+          lines: { include: { roomType: { select: { name: true, bedConfig: true } } } },
+        },
+      })
+      if (!booking) throw new TRPCError({ code: 'NOT_FOUND', message: 'ไม่พบการจอง' })
+      return booking
     }),
 })

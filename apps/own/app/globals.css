@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Scan workspace UI package for Tailwind classes (Button, Modal, Badge, etc.) */
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
+
 @theme inline {
   --font-sans: var(--font-thai), var(--font-inter), system-ui, sans-serif;
 
@@ -110,6 +113,27 @@
     @apply focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20;
     @apply disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-60;
   }
+}
+
+/* Hide the up/down spinner on number inputs — we let users type freely instead.
+   Apply universally so all <input type="number"> fields stay clean. */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Hide the WebKit calendar / clock picker indicator on date & time inputs.
+   The native picker still opens on click — we just don't draw the icon. */
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='time']::-webkit-calendar-picker-indicator,
+input[type='datetime-local']::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
 }
 
 /* Print — strip everything except the doc body */

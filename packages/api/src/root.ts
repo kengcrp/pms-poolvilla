@@ -11,8 +11,17 @@ import { accountingRouter } from './routers/accounting'
 import { couponRouter } from './routers/coupon'
 import { payoutRouter } from './routers/payout'
 import { housekeepingRouter } from './routers/housekeeping'
+import { penaltyItemRouter } from './routers/penalty-item'
+import { adminRouter } from './routers/admin'
+import { hotelRouter } from './routers/hotel'
+import { roomTypeRouter } from './routers/room-type'
+import { hotelBookingRouter } from './routers/hotel-booking'
 
 export const appRouter = router({
+  admin: adminRouter,
+  hotel: hotelRouter,
+  roomType: roomTypeRouter,
+  hotelBooking: hotelBookingRouter,
   property: propertyRouter,
   variant: variantRouter,
   location: locationRouter,
@@ -25,6 +34,7 @@ export const appRouter = router({
   coupon: couponRouter,
   payout: payoutRouter,
   housekeeping: housekeepingRouter,
+  penaltyItem: penaltyItemRouter,
 })
 
 export type AppRouter = typeof appRouter

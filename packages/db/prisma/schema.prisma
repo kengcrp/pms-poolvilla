@@ -28,12 +28,6 @@ enum PropertyReviewStatus {
   REJECTED // admin rejected, needs revision
 }
 
-enum PropertyType {
-  POOL_VILLA
-  LOFT
-  BNB
-}
-
 enum PoolOwnership {
   PRIVATE
   SHARED
@@ -137,12 +131,14 @@ model User {
   name          String
   phone         String?
   role          UserRole  @default(OWNER)
+  suspendedAt   DateTime? // when set, login is blocked
   emailVerified DateTime?
   image         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   properties     Property[]
+  hotels         Hotel[]
   payoutChannels PayoutChannel[]
   accountingDocs AccountingDoc[]
   saleSlug       String?         @unique // for /sale/[ownerSlug]
@@ -220,6 +216,19 @@ model LocationZone {
   @@index([locationId])
 }
 
+model PropertyTypeMaster {
+  id        String   @id @default(cuid())
+  code      String   @unique // POOL_VILLA, LOFT, BNB, RESORT, ...
+  nameTh    String
+  nameEn    String?
+  desc      String? // คำอธิบายสั้น
+  iconRef   String? // icon name from @pms/ui (e.g., "swimmer", "couch")
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model AmenityMaster {
   id       String  @id @default(cuid())
   code     String  @unique // wifi, parking, bbq
@@ -242,7 +251,7 @@ model Property {
   legacyCode   String? // รหัสเดิม
   ownerId      String
   name         Json // { th: "...", en: "...", zh: "..." } — MVP only `th` populated
-  type         PropertyType
+  type         String // PropertyTypeMaster.code (POOL_VILLA, LOFT, BNB, ...)
   reviewStatus PropertyReviewStatus @default(PENDING)
   pricingMode  PriceDisplayMode     @default(SHOW_SELL)
   isActive     Boolean              @default(true)
@@ -253,6 +262,9 @@ model Property {
   areaSqwa       Decimal? @db.Decimal(8, 2) // ตารางวา (Thai unit)
   partnerListing Boolean  @default(false) // "ต้องการลงประกาศพาทเนอร์"
   contactInfo    String? // "name 0987654321"
+  /// How far in advance guests can book — null = use system default (vacant per weekly settings).
+  /// Common values: 3, 6, 9, 12, 24 (months). 0 = closed.
+  bookingWindowMonths Int? // months allowed for advance booking
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -269,6 +281,7 @@ model Property {
   bookings Booking[]
 
   housekeepingTasks HousekeepingTask[]
+  penaltyItems      PenaltyItem[]
   payoutChannels    PayoutChannelProperty[]
 
   // Multilang detail (rich content sec 3) — keep in subtables for clarity
@@ -311,11 +324,15 @@ model PropertyVariant {
 
 /// Default 7 rows per variant (Sun..Sat)
 model VariantWeeklyPricing {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   variantId String
   dayOfWeek Int // 0=Sun..6=Sat
-  price     Decimal @db.Decimal(10, 2)
-  minStay   Int     @default(1)
+  price     Decimal  @db.Decimal(10, 2)
+  /// Optional partner/OTA price — shown only when Property.partnerListing is true
+  agentPrice Decimal? @db.Decimal(10, 2)
+  minStay   Int      @default(1)
+  /// Per-day toggle: when false, this variant is locked for split-room sale on this DOW
+  splitOpen Boolean  @default(true)
 
   variant PropertyVariant @relation(fields: [variantId], references: [id])
 
@@ -326,14 +343,16 @@ model VariantWeeklyPricing {
 /// Override-only storage. If row exists, it overrides weekly default.
 /// Open + no override → no row.
 model VariantCalendar {
-  id            String             @id @default(cuid())
-  variantId     String
-  date          DateTime           @db.Date
-  status        CalendarStatus     @default(OPEN)
-  priceOverride Decimal?           @db.Decimal(10, 2)
-  priceType     PriceOverrideType?
-  note          String?            @db.Text
-  bookingId     String?
+  id                 String             @id @default(cuid())
+  variantId          String
+  date               DateTime           @db.Date
+  status             CalendarStatus     @default(OPEN)
+  priceOverride      Decimal?           @db.Decimal(10, 2)
+  /// Per-day agent / OTA price override — trumps the weekly default agentPrice when set.
+  agentPriceOverride Decimal?           @db.Decimal(10, 2)
+  priceType          PriceOverrideType?
+  note               String?            @db.Text
+  bookingId          String?
 
   variant PropertyVariant @relation(fields: [variantId], references: [id])
   booking Booking?        @relation(fields: [bookingId], references: [id])
@@ -621,6 +640,185 @@ model PayoutChannelProperty {
 // Housekeeping (LINE bot integration — Phase 4+)
 // ─────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────
+// System settings (singleton) + Service master (Phase M3)
+// ─────────────────────────────────────────────────────────
+
+model SystemSetting {
+  id String @id @default("singleton")
+
+  // Commission
+  defaultCommissionPercent Decimal @default(10) @db.Decimal(5, 2)
+
+  // Feature flags
+  allowOwnerSelfPublish Boolean @default(true)
+  enableMarketplace     Boolean @default(true)
+  enableAutoCancel      Boolean @default(true)
+  enableHousekeeping    Boolean @default(false)
+
+  // Theme / branding
+  brandName     String  @default("PMS Pool Villa")
+  brandColorHex String  @default("#4f46e5")
+  logoUrl       String? @db.Text
+
+  updatedAt DateTime @updatedAt
+}
+
+model ServiceMaster {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  nameTh    String
+  nameEn    String?
+  category  String // bbq | transfer | spa | food | etc
+  basePrice Decimal? @db.Decimal(10, 2)
+  iconRef   String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────
+// Hotel module — count-based inventory (separate from pool villa)
+// ─────────────────────────────────────────────────────────
+
+enum HotelBookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+model HotelTypeMaster {
+  id        String   @id @default(cuid())
+  code      String   @unique // BUDGET, MIDSCALE, LUXURY, RESORT, BOUTIQUE
+  nameTh    String
+  nameEn    String?
+  desc      String?
+  iconRef   String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Hotel {
+  id           String               @id @default(cuid())
+  code         String               @unique // HTL-001
+  ownerId      String
+  name         Json // { th, en?, zh? }
+  hotelType    String // → HotelTypeMaster.code
+  description  String?              @db.Text
+  address      String?              @db.Text
+  phone        String?
+  email        String?
+  isActive     Boolean              @default(true)
+  reviewStatus PropertyReviewStatus @default(PENDING)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  deletedAt    DateTime?
+
+  owner     User           @relation(fields: [ownerId], references: [id])
+  roomTypes RoomType[]
+  bookings  HotelBooking[]
+  images    HotelImage[]
+
+  @@index([ownerId])
+  @@index([hotelType])
+  @@index([reviewStatus])
+  @@index([deletedAt])
+}
+
+model RoomType {
+  id             String   @id @default(cuid())
+  hotelId        String
+  name           Json // { th: "Deluxe King" }
+  description    String?  @db.Text
+  pricePerNight  Decimal  @db.Decimal(10, 2)
+  totalInventory Int // จำนวนห้องทั้งหมด
+  maxGuests      Int      @default(2)
+  bedConfig      String? // "1 King" / "2 Queen"
+  sortOrder      Int      @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  hotel        Hotel              @relation(fields: [hotelId], references: [id])
+  bookingLines HotelBookingLine[]
+  images       RoomTypeImage[]
+
+  @@index([hotelId])
+}
+
+model HotelImage {
+  id        String  @id @default(cuid())
+  hotelId   String
+  url       String  @db.Text
+  type      String // cover | gallery
+  category  String? // exterior | lobby | pool | restaurant | room | other
+  sortOrder Int     @default(0)
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@index([hotelId, type])
+}
+
+model RoomTypeImage {
+  id         String @id @default(cuid())
+  roomTypeId String
+  url        String @db.Text
+  sortOrder  Int    @default(0)
+
+  roomType RoomType @relation(fields: [roomTypeId], references: [id])
+
+  @@index([roomTypeId])
+}
+
+model HotelBooking {
+  id            String             @id @default(cuid())
+  code          String             @unique // HB-2026-0001
+  hotelId       String
+  customerName  String
+  customerPhone String?
+  customerEmail String?
+  guestCount    Int                @default(1)
+  checkin       DateTime           @db.Date
+  checkout      DateTime           @db.Date
+  totalAmount   Decimal            @db.Decimal(10, 2)
+  status        HotelBookingStatus @default(PENDING)
+  source        BookingSource      @default(OWNER_DIRECT)
+  publicNote    String?            @db.Text
+  internalNote  String?            @db.Text
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  confirmedAt DateTime?
+  cancelledAt DateTime?
+  deletedAt   DateTime?
+
+  hotel Hotel              @relation(fields: [hotelId], references: [id])
+  lines HotelBookingLine[]
+
+  @@index([hotelId, checkin, checkout])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model HotelBookingLine {
+  id            String  @id @default(cuid())
+  bookingId     String
+  roomTypeId    String
+  roomsReserved Int
+  pricePerNight Decimal @db.Decimal(10, 2) // snapshot
+  lineSubtotal  Decimal @db.Decimal(10, 2)
+
+  booking  HotelBooking @relation(fields: [bookingId], references: [id])
+  roomType RoomType     @relation(fields: [roomTypeId], references: [id])
+
+  @@index([bookingId])
+  @@index([roomTypeId])
+}
+
 model HousekeepingTask {
   id         String             @id @default(cuid())
   propertyId String
@@ -634,4 +832,21 @@ model HousekeepingTask {
 
   @@index([propertyId, date])
   @@index([status])
+}
+
+/// Penalty / damage items per property — listed in the House Keeper "ทำรายการ" page.
+/// Used by the housekeeper to record damaged or missing items (e.g. broken lightbulb)
+/// and bill the guest at the standard fee.
+model PenaltyItem {
+  id          String   @id @default(cuid())
+  propertyId  String
+  name        String
+  feePerPiece Decimal  @db.Decimal(10, 2)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@index([propertyId])
 }
