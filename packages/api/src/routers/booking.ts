@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { TRPCError } from '@trpc/server'
 import { prisma } from '@pms/db'
 import { router, ownerProcedure } from '../trpc'
 import { BookingService } from '../lib/booking-service'
@@ -97,8 +98,10 @@ export const bookingRouter = router({
     .input(
       z.object({
         id: z.string(),
-        newCheckin: isoDate,
-        newCheckout: isoDate,
+        // Both dates optional — when empty, the postpone is recorded as
+        // "ยังไม่ระบุวัน" so the booking sits in history without a new slot yet.
+        newCheckin: isoDate.or(z.literal('')),
+        newCheckout: isoDate.or(z.literal('')),
         reason: z.string().optional(),
         expiresAt: z.string().optional(),
       }),
@@ -113,6 +116,100 @@ export const bookingRouter = router({
         expiresAt: input.expiresAt,
       }),
     ),
+
+  /** Count of postpones with no new dates set yet + timestamp of the most recent
+   *  one. Drives the sidebar badge:
+   *   - count = 0 → no badge
+   *   - count > 0 AND seenAt < latestAt → red (unseen / new entries)
+   *   - count > 0 AND seenAt >= latestAt → gray (all seen) */
+  pendingPostponeCount: ownerProcedure.query(async ({ ctx }) => {
+    const [count, latest] = await Promise.all([
+      prisma.bookingPostpone.count({
+        where: {
+          booking: { property: { ownerId: ctx.ownerId, deletedAt: null } },
+          newCheckin: null,
+        },
+      }),
+      prisma.bookingPostpone.findFirst({
+        where: {
+          booking: { property: { ownerId: ctx.ownerId, deletedAt: null } },
+          newCheckin: null,
+        },
+        orderBy: { postponedAt: 'desc' },
+        select: { postponedAt: true },
+      }),
+    ])
+    return { count, latestAt: latest?.postponedAt ?? null }
+  }),
+
+  /** Commit new check-in/out dates onto an existing "ยังไม่ระบุวัน" postpone row.
+   *  Used by the "จองวันเข้าพักใหม่" modal in /manage/postpone. Reserves the new
+   *  calendar cells, updates the booking dates, and stamps the new dates onto
+   *  the postpone history row so it disappears from the "active" tab. */
+  completePostpone: ownerProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        newCheckin: isoDate,
+        newCheckout: isoDate,
+        total: z.number().nonnegative().optional(),
+        deposit: z.number().nonnegative().optional(),
+        note: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const row = await prisma.bookingPostpone.findFirst({
+        where: {
+          id: input.id,
+          booking: { property: { ownerId: ctx.ownerId, deletedAt: null } },
+        },
+        include: { booking: true },
+      })
+      if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'ไม่พบรายการ' })
+      if (input.newCheckout <= input.newCheckin) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'วันเช็คเอาท์ต้องมาหลังวันเช็คอิน' })
+      }
+      // Delegate the heavy lifting (cell reservation, conflict check) to BookingService
+      await BookingService.postpone({
+        bookingId: row.bookingId,
+        ownerId: ctx.ownerId,
+        newCheckin: input.newCheckin,
+        newCheckout: input.newCheckout,
+        reason: input.note ?? row.reason ?? undefined,
+        expiresAt: row.expiresAt,
+      })
+      // Update optional pricing fields on the underlying booking
+      if (typeof input.total === 'number' || typeof input.deposit === 'number') {
+        await prisma.booking.update({
+          where: { id: row.bookingId },
+          data: {
+            ...(typeof input.total === 'number' && { total: input.total }),
+            ...(typeof input.deposit === 'number' && { deposit: input.deposit }),
+          },
+        })
+      }
+      // BookingService.postpone CREATES a new BookingPostpone row, so the original
+      // "ยังไม่ระบุวัน" row would still exist. Delete it so the active tab clears.
+      await prisma.bookingPostpone.delete({ where: { id: row.id } }).catch(() => null)
+      return { ok: true }
+    }),
+
+  /** Delete a postpone entry — owner cleans up a history row. Doesn't touch the
+   *  underlying booking, only removes the postpone log. */
+  deletePostpone: ownerProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify the postpone belongs to a property the owner owns
+      const row = await prisma.bookingPostpone.findFirst({
+        where: {
+          id: input.id,
+          booking: { property: { ownerId: ctx.ownerId, deletedAt: null } },
+        },
+      })
+      if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'ไม่พบรายการ' })
+      await prisma.bookingPostpone.delete({ where: { id: input.id } })
+      return { ok: true }
+    }),
 
   postponeHistory: ownerProcedure
     .input(z.object({ scope: z.enum(['ACTIVE', 'EXPIRED', 'ALL']).default('ALL') }).optional())

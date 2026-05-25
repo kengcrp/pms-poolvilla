@@ -25,17 +25,58 @@ const tabs: { key: Tab; label: string; icon: IconName; activeClass: string }[] =
   { key: 'block',   label: 'ปิดซ่อม',  icon: 'toolbox',   activeClass: 'bg-white text-gray-700 shadow-sm ring-1 ring-gray-200' },
 ]
 
-const statusBadgeMap = {
-  BOOKED: { label: 'จองแล้ว', variant: 'danger' as const },
-  PENDING_PAYMENT: { label: 'รอชำระ', variant: 'warning' as const },
-  UNDER_MAINTENANCE: { label: 'ปิดซ่อม', variant: 'default' as const },
-  OPEN: { label: 'ว่าง', variant: 'success' as const },
-}
-
 export function BookingModal({ open, onClose, variantId, variantLabel, initialDate }: Props) {
   const utils = trpc.useUtils()
   const [tab, setTab] = useState<Tab>('quick')
   const [error, setError] = useState<string | null>(null)
+  // Postpone mode replaces the booking-creation tabs with a "move check-in date" form.
+  // Triggered by the "เลื่อนวันเข้าพัก" button on an existing booking banner.
+  const [postponeMode, setPostponeMode] = useState(false)
+  const [postponeForm, setPostponeForm] = useState({
+    newCheckin: '',
+    newCheckout: '',
+    /** Free-text additional note — only used when "อื่นๆ" is selected. */
+    reason: '',
+    /** Checked preset reasons (multi-select) */
+    reasonChecks: [] as string[],
+    /** Whether "อื่นๆ" is checked — reveals the free-text note field */
+    reasonOther: false,
+    expiresAt: '',
+    /** When true, the owner is postponing without committing to new dates yet.
+     *  The booking still appears in /manage/postpone history under "ประวัติเลื่อนเข้าพัก"
+     *  with a "ยังไม่ระบุวัน" status, and the original dates are freed. */
+    dateUnspecified: false,
+  })
+
+  /** Preset postpone reasons — owner ticks one or more; "อื่นๆ" opens a textarea. */
+  const POSTPONE_REASON_PRESETS = [
+    'สมาชิกในกลุ่มเจ็บป่วยกะทันหัน หรือติดธุระด่วน',
+    'สมาชิกในกลุ่มเกิดการเปลี่ยนแปลง (คนมาไม่ได้ / สมาชิกขอยกเลิก)',
+    'สภาพอากาศไม่เอื้ออำนวย (เช่น พายุเข้า ฝนตกหนัก น้ำท่วม)',
+    'เกิดภัยธรรมชาติตามเส้นทางเดินทางหรือในพื้นที่ที่พัก',
+    'ต้องการเปลี่ยนไปพักในโอกาสพิเศษอื่น (เช่น เลื่อนไปตรงวันเกิด วันครบรอบ)',
+  ]
+
+  /** Combine ticked presets + optional "อื่นๆ" note into the single reason
+   *  string the API expects. Each preset is line-separated for readability. */
+  function buildReasonText(): string {
+    const parts = [...postponeForm.reasonChecks]
+    if (postponeForm.reasonOther && postponeForm.reason.trim()) {
+      parts.push(`อื่นๆ: ${postponeForm.reason.trim()}`)
+    }
+    return parts.join('\n')
+  }
+  function toggleReasonCheck(text: string) {
+    setPostponeForm((prev) => {
+      const has = prev.reasonChecks.includes(text)
+      return {
+        ...prev,
+        reasonChecks: has
+          ? prev.reasonChecks.filter((r) => r !== text)
+          : [...prev.reasonChecks, text],
+      }
+    })
+  }
 
   // Use UTC-based ymd to match how MiniCalendar / API store dates (UTC midnight).
   // ymdLocal would shift by 1 day in any timezone west of UTC.
@@ -69,6 +110,16 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
     if (!open) return
     setError(null)
     setTab('quick')
+    setPostponeMode(false)
+    setPostponeForm({
+      newCheckin: '',
+      newCheckout: '',
+      reason: '',
+      reasonChecks: [],
+      reasonOther: false,
+      expiresAt: '',
+      dateUnspecified: false,
+    })
     setAppliedCoupon(null)
     setForm({
       checkin: dateStr,
@@ -96,6 +147,25 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
     { variantId: variantId ?? '', date: dateStr },
     { enabled: !!variantId && !!dateStr && open },
   )
+
+  // When the clicked cell has an existing booking, prefill the form with its data so the
+  // user can review / edit instead of starting blank. Runs whenever `cell.booking` loads.
+  useEffect(() => {
+    if (!open || !cell?.booking) return
+    const b = cell.booking
+    setForm((prev) => ({
+      ...prev,
+      checkin: ymd(b.checkin),
+      checkout: ymd(b.checkout),
+      customerName: b.customerName ?? '',
+      customerPhone: b.customerPhone ?? '',
+      bookerName: b.bookerName ?? '',
+      guestCount: b.guestCount ?? 2,
+      total: Number(b.total) || 0,
+      publicNote: b.publicNote ?? '',
+      internalNote: b.internalNote ?? '',
+    }))
+  }, [open, cell?.booking])
 
   const invalidateAll = () => {
     utils.calendar.range.invalidate()
@@ -154,6 +224,18 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
   const blockDates = trpc.booking.blockDates.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(friendlyError(e.message)) })
   const cancel = trpc.booking.cancel.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(friendlyError(e.message)) })
   const unblock = trpc.booking.unblockDates.useMutation({ onSuccess: () => { invalidateAll(); onClose() }, onError: (e) => setError(friendlyError(e.message)) })
+  // postpone = "เลื่อนวันเข้าพัก" — moves booking to new dates, freeing the original cells.
+  // History is visible at /manage/postpone (เมนูเลื่อนวันเข้าพัก).
+  const postpone = trpc.booking.postpone.useMutation({
+    onSuccess: () => {
+      invalidateAll()
+      utils.booking.postponeHistory.invalidate()
+      // Refresh sidebar badge — "ยังไม่ระบุวัน" postpones bump this counter
+      utils.booking.pendingPostponeCount.invalidate()
+      onClose()
+    },
+    onError: (e) => setError(friendlyError(e.message)),
+  })
 
   const submit = () => {
     if (!variantId) return
@@ -210,34 +292,83 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
   }
 
   const isExisting = cell && cell.status !== 'OPEN'
-  const existingBadge = cell ? statusBadgeMap[cell.status] : null
+
+  /** Switch to postpone mode — pre-fill with current dates so the user only adjusts. */
+  function enterPostponeMode() {
+    if (!cell?.booking) return
+    setError(null)
+    setPostponeMode(true)
+    setPostponeForm({
+      newCheckin: ymd(cell.booking.checkin),
+      newCheckout: ymd(cell.booking.checkout),
+      reason: '',
+      reasonChecks: [],
+      reasonOther: false,
+      expiresAt: '',
+      dateUnspecified: false,
+    })
+  }
+
+  function submitPostpone() {
+    setError(null)
+    if (!cell?.booking) return
+    // "ยังไม่ระบุวัน" path — skip date validation; backend will mark this as a
+    // pending-dates postpone and free the original cells without re-allocating yet.
+    if (postponeForm.dateUnspecified) {
+      postpone.mutate({
+        id: cell.booking.id,
+        newCheckin: '',
+        newCheckout: '',
+        reason: buildReasonText() || undefined,
+        expiresAt: postponeForm.expiresAt
+          ? new Date(`${postponeForm.expiresAt}T23:59:00`).toISOString()
+          : undefined,
+      })
+      return
+    }
+    if (!postponeForm.newCheckin || !postponeForm.newCheckout) {
+      return setError('กรุณาเลือกวันที่เข้าพักใหม่ หรือติ๊ก "ยังไม่ระบุวัน"')
+    }
+    if (postponeForm.newCheckout <= postponeForm.newCheckin) {
+      return setError('วันเช็คเอาท์ต้องมาหลังวันเช็คอิน')
+    }
+    postpone.mutate({
+      id: cell.booking.id,
+      newCheckin: postponeForm.newCheckin,
+      newCheckout: postponeForm.newCheckout,
+      reason: buildReasonText() || undefined,
+      expiresAt: postponeForm.expiresAt
+        ? new Date(`${postponeForm.expiresAt}T23:59:00`).toISOString()
+        : undefined,
+    })
+  }
 
   return (
     <Modal open={open} onClose={onClose} title="ทำรายการจอง" description={variantLabel} size="lg">
       <ModalBody>
-        {isExisting && cell.booking && (
-          <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50/50 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={existingBadge!.variant} dot>{existingBadge!.label}</Badge>
-                  <span className="font-semibold text-gray-900">{cell.booking.customerName}</span>
-                </div>
-                <div className="mt-1.5 text-xs text-gray-600">
-                  {ymd(cell.booking.checkin)} → {ymd(cell.booking.checkout)} · {cell.booking.guestCount} ท่าน · ฿{Number(cell.booking.total).toLocaleString()}
-                </div>
-                {cell.booking.publicNote && <div className="mt-1 text-xs text-gray-500">{cell.booking.publicNote}</div>}
-              </div>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={() => {
-                  if (confirm('ยืนยันยกเลิกการจอง? วันที่จะกลับเป็น open')) cancel.mutate({ id: cell.booking!.id })
-                }}
-              >
-                ยกเลิกการจอง
-              </Button>
-            </div>
+        {/* Existing booking — show only the two action buttons (เลื่อนวันเข้าพัก + ยกเลิกการจอง).
+            The form below auto-fills with the booking's data so the customer info is visible
+            in its natural place; no need for a separate summary banner. */}
+        {isExisting && cell.booking && !postponeMode && (
+          <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={enterPostponeMode}
+              className="border-amber-300 bg-white text-amber-700 hover:bg-amber-50"
+            >
+              <Icon name="calendar" className="size-3" />
+              เลื่อนวันเข้าพัก
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() => {
+                if (confirm('ยืนยันยกเลิกการจอง? วันที่จะกลับเป็น open')) cancel.mutate({ id: cell.booking!.id })
+              }}
+            >
+              ยกเลิกการจอง
+            </Button>
           </div>
         )}
 
@@ -259,26 +390,242 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="mb-5 flex gap-1 rounded-xl bg-gray-100 p-1">
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTab(t.key)}
-              className={cn(
-                'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all',
-                tab === t.key
-                  ? t.activeClass
-                  : 'text-gray-600 hover:text-gray-900',
-              )}
-            >
-              <Icon name={t.icon} className="size-3.5" />
-              <span>{t.label}</span>
-            </button>
-          ))}
-        </div>
+        {/* Tabs — hidden in postpone mode (form takes over the modal body) */}
+        {!postponeMode && (
+          <div className="mb-5 flex gap-1 rounded-xl bg-gray-100 p-1">
+            {tabs.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                className={cn(
+                  'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all',
+                  tab === t.key
+                    ? t.activeClass
+                    : 'text-gray-600 hover:text-gray-900',
+                )}
+              >
+                <Icon name={t.icon} className="size-3.5" />
+                <span>{t.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
+        {/* Postpone form — replaces the booking-creation form while postponeMode is on.
+            Submitting calls booking.postpone → history visible at /manage/postpone.
+            Redesigned with: compact icon banner, prominent date card, collapsed
+            optional fields. */}
+        {postponeMode && cell?.booking && (
+          <div className="space-y-3">
+            {/* Compact context banner — original dates as chips, no long paragraph */}
+            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                <Icon name="alert" className="size-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold text-amber-900">โหมดเลื่อนวันเข้าพัก</div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+                  <span className="text-amber-800">วันเดิม:</span>
+                  <span className="rounded-md bg-white px-2 py-0.5 font-mono text-[11px] text-amber-900 ring-1 ring-amber-200">
+                    {ymd(cell.booking.checkin)}
+                  </span>
+                  <span className="rounded-md bg-white px-2 py-0.5 font-mono text-[11px] text-amber-900 ring-1 ring-amber-200">
+                    {ymd(cell.booking.checkout)}
+                  </span>
+                  <span className="ml-1 text-amber-700">จะกลับเป็นว่างทันที</span>
+                </div>
+              </div>
+            </div>
+
+            {/* New-dates card — only visible when committing new dates */}
+            {!postponeForm.dateUnspecified && (
+              <div className="rounded-xl border-2 border-brand-200 bg-brand-50/30 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="flex size-7 items-center justify-center rounded-full bg-brand-600 text-white">
+                    <Icon name="calendarPlus" className="size-3.5" />
+                  </div>
+                  <span className="text-sm font-bold text-gray-900">เลือกวันเข้าพักใหม่</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label required>วันเช็คอินใหม่</Label>
+                    <Input
+                      type="date"
+                      value={postponeForm.newCheckin}
+                      onChange={(e) =>
+                        setPostponeForm({ ...postponeForm, newCheckin: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label required>วันเช็คเอาท์ใหม่</Label>
+                    <Input
+                      type="date"
+                      value={postponeForm.newCheckout}
+                      onChange={(e) =>
+                        setPostponeForm({ ...postponeForm, newCheckout: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Details card — groups deadline + "ยังไม่ระบุวัน" toggle + reason
+                in one frame so they read as a single block. Collapsible to reduce
+                visual noise when owner just wants to confirm new dates. */}
+            <details
+              open
+              className="rounded-xl border border-gray-200 bg-white p-3 [&[open]>summary>svg]:rotate-180"
+            >
+              <summary className="flex cursor-pointer items-center justify-between gap-2 text-sm font-semibold text-gray-700 [&::-webkit-details-marker]:hidden">
+                <span className="flex items-center gap-1.5">
+                  <Icon name="sliders" className="size-3.5 text-gray-500" />
+                  รายละเอียดเพิ่มเติม (ไม่บังคับ)
+                </span>
+                <svg className="size-3.5 transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
+              </summary>
+              <div className="mt-3 space-y-3">
+                {/* 1. วันหมดเขตเลื่อน */}
+                <div>
+                  <Label>วันหมดเขตเลื่อน</Label>
+                  <Input
+                    type="date"
+                    value={postponeForm.expiresAt}
+                    onChange={(e) =>
+                      setPostponeForm({ ...postponeForm, expiresAt: e.target.value })
+                    }
+                  />
+                  <p className="mt-1 flex items-center gap-1 text-[11px] text-gray-500">
+                    <Icon name="info" className="size-3" />
+                    ถ้าระบุ ระบบจะแสดงสถานะ "หมดเขตเลื่อนวัน" เมื่อเลยวันนี้
+                  </p>
+                </div>
+
+                {/* 2. ยังไม่ระบุวัน toggle (moved here from above) — controls whether
+                       the postpone commits to new dates or sits "pending" in history. */}
+                <label
+                  className={cn(
+                    'flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 transition-all',
+                    postponeForm.dateUnspecified
+                      ? 'border-brand-500 bg-brand-50/50'
+                      : 'border-gray-200 bg-white hover:border-brand-300',
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={postponeForm.dateUnspecified}
+                    onChange={(e) =>
+                      setPostponeForm({ ...postponeForm, dateUnspecified: e.target.checked })
+                    }
+                    className="mt-0.5 size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold text-gray-900">ยังไม่ระบุวัน</div>
+                    <p className="mt-0.5 text-xs leading-relaxed text-gray-600">
+                      เลื่อนวันเข้าพักโดยยังไม่ตัดสินใจวันใหม่ — รายการจะอยู่ใน
+                      <span className="font-medium text-brand-700"> ประวัติเลื่อนเข้าพัก </span>
+                      และคืนวันเดิมเป็นว่างทันที
+                    </p>
+                  </div>
+                </label>
+
+                {/* 3. เหตุผล — collapsed by default; click to expand the checklist.
+                    Shows a small count badge once any reason is selected so owner can
+                    see at a glance whether they've picked one. */}
+                <details
+                  className="rounded-lg border border-gray-200 bg-white [&[open]>summary>svg]:rotate-180"
+                  // Auto-open if any reason was already selected (e.g. editing flow)
+                  open={postponeForm.reasonChecks.length > 0 || postponeForm.reasonOther}
+                >
+                  <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2.5 text-sm font-medium text-gray-800 [&::-webkit-details-marker]:hidden">
+                    <span className="flex items-center gap-2">
+                      เหตุผล
+                      {(postponeForm.reasonChecks.length > 0 || postponeForm.reasonOther) && (
+                        <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-brand-600 px-1.5 text-[10px] font-bold text-white">
+                          {postponeForm.reasonChecks.length + (postponeForm.reasonOther ? 1 : 0)}
+                        </span>
+                      )}
+                    </span>
+                    <svg className="size-3.5 text-gray-500 transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
+                  </summary>
+                  <div className="space-y-1.5 border-t border-gray-100 p-3">
+                    {POSTPONE_REASON_PRESETS.map((text) => {
+                      const checked = postponeForm.reasonChecks.includes(text)
+                      return (
+                        <label
+                          key={text}
+                          className={cn(
+                            'flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2 text-sm transition-colors',
+                            checked
+                              ? 'border-brand-400 bg-brand-50/40'
+                              : 'border-gray-200 bg-white hover:border-gray-300',
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleReasonCheck(text)}
+                            className="mt-0.5 size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                          />
+                          <span className="leading-relaxed text-gray-800">{text}</span>
+                        </label>
+                      )
+                    })}
+
+                    {/* "อื่นๆ" — checkbox + textarea (revealed when checked) */}
+                    <label
+                      className={cn(
+                        'flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2 text-sm transition-colors',
+                        postponeForm.reasonOther
+                          ? 'border-brand-400 bg-brand-50/40'
+                          : 'border-gray-200 bg-white hover:border-gray-300',
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={postponeForm.reasonOther}
+                        onChange={(e) =>
+                          setPostponeForm({
+                            ...postponeForm,
+                            reasonOther: e.target.checked,
+                            // Clear the custom note when unchecking "อื่นๆ"
+                            reason: e.target.checked ? postponeForm.reason : '',
+                          })
+                        }
+                        className="mt-0.5 size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                      />
+                      <span className="leading-relaxed text-gray-800">
+                        อื่นๆ พร้อมระบุหมายเหตุ
+                      </span>
+                    </label>
+                    {postponeForm.reasonOther && (
+                      <Textarea
+                        rows={2}
+                        value={postponeForm.reason}
+                        onChange={(e) =>
+                          setPostponeForm({ ...postponeForm, reason: e.target.value })
+                        }
+                        placeholder="ระบุหมายเหตุเพิ่มเติม..."
+                        className="ml-7"
+                      />
+                    )}
+                  </div>
+                </details>
+              </div>
+            </details>
+
+            {error && (
+              <div className="rounded-lg bg-red-50 px-3.5 py-2.5 text-sm text-red-700 ring-1 ring-inset ring-red-200">
+                {error}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Booking-creation form — wrapped so postpone mode can hide it cleanly */}
+        {!postponeMode && (<>
         {/* Date row */}
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -476,14 +823,28 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
             {error}
           </div>
         )}
+        </>)}
       </ModalBody>
       <ModalFooter>
-        <Button variant="secondary" onClick={onClose}>
-          ปิด
-        </Button>
-        <Button onClick={submit} variant={tab === 'block' ? 'secondary' : tab === 'invoice' ? 'primary' : 'primary'}>
-          {tab === 'block' ? 'ปิดซ่อม' : tab === 'invoice' ? 'ออกใบจอง' : tab === 'pending' ? 'บันทึก รอชำระ' : 'จองด่วน'}
-        </Button>
+        {postponeMode ? (
+          <>
+            <Button variant="secondary" onClick={() => setPostponeMode(false)}>
+              ย้อนกลับ
+            </Button>
+            <Button onClick={submitPostpone} disabled={postpone.isPending}>
+              {postpone.isPending ? 'กำลังเลื่อน...' : 'ยืนยันเลื่อนวันเข้าพัก'}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="secondary" onClick={onClose}>
+              ปิด
+            </Button>
+            <Button onClick={submit} variant={tab === 'block' ? 'secondary' : tab === 'invoice' ? 'primary' : 'primary'}>
+              {tab === 'block' ? 'ปิดซ่อม' : tab === 'invoice' ? 'ออกใบจอง' : tab === 'pending' ? 'บันทึก รอชำระ' : 'จองด่วน'}
+            </Button>
+          </>
+        )}
       </ModalFooter>
     </Modal>
   )

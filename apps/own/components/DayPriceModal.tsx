@@ -35,6 +35,10 @@ export function DayPriceModal({ open, onClose, variantId, variantLabel, initialD
     agentPrice: 0,
     tag: 'NORMAL' as PriceTag,
     note: '',
+    /** Original (pre-discount) price — auto-suggested from the weekly default
+     *  when user picks "โปรโมชั่น (ลดราคา)" so the strikethrough comparison
+     *  displays correctly in the calendar/pricing views. */
+    originalPrice: 0,
   })
 
   // Load current price / override for the clicked date (single-night preview)
@@ -58,6 +62,7 @@ export function DayPriceModal({ open, onClose, variantId, variantLabel, initialD
       agentPrice: 0,
       tag: 'NORMAL',
       note: '',
+      originalPrice: 0,
     })
   }, [open, dateStr, nextDayStr])
 
@@ -75,6 +80,10 @@ export function DayPriceModal({ open, onClose, variantId, variantLabel, initialD
             ? 'DISCOUNT'
             : 'NORMAL',
       note: todayData.note ?? '',
+      // If there's already a stored originalPrice (existing discount), reuse it.
+      // Otherwise treat the current `price` as the "original" baseline so toggling
+      // to DISCOUNT pre-fills sensibly (owner just lowers the price field).
+      originalPrice: todayData.originalPrice ?? todayData.price ?? 0,
     }))
   }, [todayData])
 
@@ -111,6 +120,10 @@ export function DayPriceModal({ open, onClose, variantId, variantLabel, initialD
       // Send agent price too — null when 0 so the calendar shows "—" in agent mode
       agentPrice: form.agentPrice > 0 ? form.agentPrice : null,
       priceType: form.tag === 'NORMAL' ? null : form.tag,
+      // Only persist originalPrice for DISCOUNT (and only when higher than the
+      // new price) — server enforces the same rule.
+      originalPrice:
+        form.tag === 'DISCOUNT' && form.originalPrice > form.price ? form.originalPrice : null,
       note: form.note || null,
     })
   }
@@ -192,6 +205,40 @@ export function DayPriceModal({ open, onClose, variantId, variantLabel, initialD
             </p>
           </div>
         </div>
+
+        {/* DISCOUNT-only: original price input + preview */}
+        {form.tag === 'DISCOUNT' && (
+          <div className="mt-5 rounded-xl border-2 border-red-200 bg-red-50/40 p-4">
+            <div className="mb-2 flex items-center gap-1.5">
+              <span className="text-base">🏷</span>
+              <span className="text-sm font-bold text-gray-900">โปรโมชั่นลดราคา</span>
+            </div>
+            <Label>ราคาเดิม (ก่อนลด)</Label>
+            <NumberInput
+              value={form.originalPrice}
+              onChange={(v) => setForm({ ...form, originalPrice: v })}
+              className="text-lg font-semibold tabular-nums"
+              placeholder="0"
+            />
+            <p className="mt-1.5 text-[11px] text-gray-500">
+              ราคาเดิมต้องสูงกว่าราคาขายปัจจุบัน — ใช้สำหรับแสดง "ขีดราคา" บนปฏิทิน
+            </p>
+
+            {/* Live preview — ขีดราคาเดิม + ราคาใหม่สีแดง */}
+            {form.originalPrice > form.price && (
+              <div className="mt-3 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm">
+                <span className="text-xs text-gray-500">ตัวอย่างที่แสดง:</span>{' '}
+                <span className="text-gray-400 line-through">
+                  ฿{form.originalPrice.toLocaleString()}
+                </span>{' '}
+                <span className="font-bold text-red-600">฿{form.price.toLocaleString()}</span>{' '}
+                <span className="ml-1 text-[11px] font-semibold text-red-600">
+                  -{Math.round(((form.originalPrice - form.price) / form.originalPrice) * 100)}%
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Tag radios */}
         <div className="mt-5">

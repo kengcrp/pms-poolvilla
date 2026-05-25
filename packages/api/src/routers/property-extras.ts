@@ -19,6 +19,30 @@ async function assertOwn(propertyId: string, ownerId: string) {
 
 const localizedJson = (th: string) => ({ th, en: '', zh: '' }) as Prisma.InputJsonValue
 
+/** "14:00:00" / "14:00" → "14:00". Returns undefined for invalid input. */
+function normalizeTime(s: string): string | undefined {
+  const m = s.trim().match(/^(\d{1,2}):(\d{2})/)
+  if (!m) return undefined
+  const h = Math.min(23, Math.max(0, Number(m[1])))
+  const mi = Math.min(59, Math.max(0, Number(m[2])))
+  return `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`
+}
+
+/** Combine an HH + MM (+ optional am/pm) into a 24-hour "HH:MM" string. */
+function formatHM(h: string | undefined, mm: string | undefined, ampm?: string): string | undefined {
+  if (!h || !mm) return undefined
+  let hour = Number(h)
+  const minute = Number(mm)
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return undefined
+  if (ampm) {
+    const ap = ampm.toLowerCase()
+    if (ap === 'pm' && hour < 12) hour += 12
+    if (ap === 'am' && hour === 12) hour = 0
+  }
+  if (hour > 23 || minute > 59) return undefined
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
 export const propertyExtrasRouter = router({
   // ─── Location ─────────────────────────────────────────────
   upsertLocation: ownerProcedure.input(propertyLocationSchema).mutation(async ({ ctx, input }) => {
@@ -232,5 +256,234 @@ export const propertyExtrasRouter = router({
           sortOrder: 0,
         },
       })
+    }),
+
+  /**
+   * Resolve a Google Maps URL (including shortlinks like maps.app.goo.gl/* or goo.gl/maps/*)
+   * to its lat/lng coordinates. Browsers can't follow these redirects due to CORS, so this
+   * runs server-side: fetch the URL, follow redirects, then regex-match coordinates from
+   * the resolved URL and HTML body.
+   */
+  resolveGmapCoords: ownerProcedure
+    .input(z.object({ url: z.string().url('ลิงก์ไม่ถูกต้อง') }))
+    .mutation(async ({ input }) => {
+      const tryExtract = (s: string): { lat: number; lng: number } | null => {
+        // @lat,lng (most common in /maps URLs)
+        let m = s.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
+        // ?q=lat,lng or &q=lat,lng
+        if (!m) m = s.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/)
+        // ?ll=lat,lng
+        if (!m) m = s.match(/[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/)
+        // ?query=lat,lng (Google Maps API URLs)
+        if (!m) m = s.match(/[?&]query=(-?\d+\.\d+),(-?\d+\.\d+)/)
+        // !3d{lat}!4d{lng} (place URL embedded coords)
+        if (!m) {
+          const lat3 = s.match(/!3d(-?\d+\.\d+)/)
+          const lng4 = s.match(/!4d(-?\d+\.\d+)/)
+          if (lat3 && lng4) {
+            return { lat: Number(lat3[1]), lng: Number(lng4[1]) }
+          }
+        }
+        if (m) return { lat: Number(m[1]), lng: Number(m[2]) }
+        return null
+      }
+
+      // First try the input URL directly (in case it already contains coords)
+      const direct = tryExtract(input.url)
+      if (direct) return { ...direct, source: 'url' as const }
+
+      // Otherwise fetch and inspect the final URL + body (server-side, no CORS)
+      try {
+        const res = await fetch(input.url, {
+          redirect: 'follow',
+          headers: {
+            // Regular user-agent so Google returns the canonical /maps URL with @coords
+            'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9,th;q=0.8',
+          },
+        })
+        // Inspect both the final redirected URL and the page HTML — coords often live in one or the other
+        const fromFinalUrl = tryExtract(res.url)
+        if (fromFinalUrl) return { ...fromFinalUrl, source: 'redirect' as const }
+
+        const body = await res.text()
+        const fromBody = tryExtract(body)
+        if (fromBody) return { ...fromBody, source: 'body' as const }
+
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'ไม่พบพิกัดในลิงก์ — ลองคัดลอกลิงก์เต็มจาก Google Maps อีกครั้ง',
+        })
+      } catch (err) {
+        if (err instanceof TRPCError) throw err
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'ดึงลิงก์ไม่สำเร็จ — ตรวจสอบ URL หรือลองใหม่อีกครั้ง',
+        })
+      }
+    }),
+
+  /**
+   * Scrape a listing URL (Airbnb / Vrbo / TripAdvisor / Booking.com / etc.) and return
+   * structured property data: name, description, image URLs, bedroom/bathroom/guest counts.
+   *
+   * Strategy:
+   *   1. Fetch the page server-side (no CORS) with a real-browser User-Agent
+   *   2. Extract from <meta property="og:..."> tags (always present on these sites)
+   *   3. Extract from JSON-LD blocks if present (Booking.com, some Airbnb pages)
+   *   4. Best-effort regex for "N bedrooms", "N bathrooms", "N guests" in the HTML
+   *
+   * Note: Not all sites expose all fields reliably — this is best-effort and the owner
+   * always reviews/edits in the form before saving.
+   */
+  scrapeListingUrl: ownerProcedure
+    .input(z.object({ url: z.string().url('ลิงก์ไม่ถูกต้อง') }))
+    .mutation(async ({ input }) => {
+      try {
+        const res = await fetch(input.url, {
+          redirect: 'follow',
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9,th;q=0.8',
+          },
+        })
+        const html = await res.text()
+
+        // ── OpenGraph metadata (universally supported) ──
+        const meta = (prop: string) => {
+          const m = html.match(
+            new RegExp(`<meta[^>]+property=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i'),
+          ) ?? html.match(
+            new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${prop}["']`, 'i'),
+          )
+          return m?.[1]?.trim()
+        }
+        const ogTitle = meta('og:title')
+        const ogDesc = meta('og:description')
+        const ogImage = meta('og:image')
+
+        // Collect ALL og:image / og:image:url tags for an image gallery
+        const imageRegex =
+          /<meta[^>]+property=["']og:image(?::url)?["'][^>]+content=["']([^"']+)["']/gi
+        const images: string[] = []
+        let m: RegExpExecArray | null
+        while ((m = imageRegex.exec(html))) {
+          if (m[1] && !images.includes(m[1])) images.push(m[1])
+        }
+        if (ogImage && !images.includes(ogImage)) images.unshift(ogImage)
+
+        // ── JSON-LD (Booking.com et al. expose LodgingBusiness / HotelRoom schema) ──
+        let bedrooms: number | undefined
+        let bathrooms: number | undefined
+        let guests: number | undefined
+        let checkinTime: string | undefined
+        let checkoutTime: string | undefined
+        const ldRegex =
+          /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+        let ld: RegExpExecArray | null
+        while ((ld = ldRegex.exec(html))) {
+          try {
+            const json = JSON.parse(ld[1]!)
+            const blocks: unknown[] = Array.isArray(json) ? json : [json]
+            for (const blk of blocks) {
+              if (!blk || typeof blk !== 'object') continue
+              const b = blk as Record<string, unknown>
+              const nr = b.numberOfRooms
+              if (typeof nr === 'number' && !bedrooms) bedrooms = nr
+              const occ = b.occupancy as { value?: number } | undefined
+              if (occ?.value && !guests) guests = occ.value
+              // Schema.org LodgingBusiness exposes checkinTime / checkoutTime as
+              // ISO time strings (e.g. "14:00:00"). Normalize to "HH:MM".
+              const ci = b.checkinTime
+              if (typeof ci === 'string' && !checkinTime) checkinTime = normalizeTime(ci)
+              const co = b.checkoutTime
+              if (typeof co === 'string' && !checkoutTime) checkoutTime = normalizeTime(co)
+              const amen = b.amenityFeature as Array<{ name?: string; value?: unknown }> | undefined
+              if (Array.isArray(amen)) {
+                for (const a of amen) {
+                  const name = (a.name ?? '').toString().toLowerCase()
+                  const val = Number(a.value) || 0
+                  if (val && /bedroom/.test(name) && !bedrooms) bedrooms = val
+                  if (val && /bath/.test(name) && !bathrooms) bathrooms = val
+                  if (val && /(guest|sleeps?|occup)/.test(name) && !guests) guests = val
+                }
+              }
+            }
+          } catch {
+            /* malformed JSON-LD — ignore */
+          }
+        }
+
+        // ── Best-effort regex fallback for plain HTML phrases ──
+        const num = (s: string | undefined) =>
+          s ? Number(s.replace(/[^\d]/g, '')) || undefined : undefined
+
+        if (!bedrooms) {
+          // "3 bedrooms" / "3 ห้องนอน" / "ห้องนอน 3"
+          const re =
+            html.match(/(\d+)\s*bedrooms?/i) ??
+            html.match(/(\d+)\s*ห้องนอน/) ??
+            html.match(/ห้องนอน\s*(\d+)/)
+          bedrooms = num(re?.[1])
+        }
+        if (!bathrooms) {
+          const re =
+            html.match(/(\d+)\s*bathrooms?/i) ??
+            html.match(/(\d+)\s*ห้องน้ำ/) ??
+            html.match(/ห้องน้ำ\s*(\d+)/)
+          bathrooms = num(re?.[1])
+        }
+        if (!guests) {
+          const re =
+            html.match(/(\d+)\s*guests?/i) ??
+            html.match(/sleeps?\s*(\d+)/i) ??
+            html.match(/(\d+)\s*ท่าน/) ??
+            html.match(/(\d+)\s*คน/)
+          guests = num(re?.[1])
+        }
+        // Check-in / check-out time regex fallback — many sites print these as plain text
+        // Patterns covered: "Check-in: 2:00 PM", "Check-in from 14:00", "เช็คอิน 14:00"
+        if (!checkinTime) {
+          const re =
+            html.match(/check[-\s]?in[^0-9]{0,30}(\d{1,2})[:.](\d{2})\s*(am|pm)?/i) ??
+            html.match(/เช็คอิน[^0-9]{0,15}(\d{1,2})[:.](\d{2})/) ??
+            html.match(/รับห้อง[^0-9]{0,15}(\d{1,2})[:.](\d{2})/)
+          if (re) checkinTime = formatHM(re[1], re[2], re[3])
+        }
+        if (!checkoutTime) {
+          const re =
+            html.match(/check[-\s]?out[^0-9]{0,30}(\d{1,2})[:.](\d{2})\s*(am|pm)?/i) ??
+            html.match(/เช็คเอาท?์?[^0-9]{0,15}(\d{1,2})[:.](\d{2})/) ??
+            html.match(/คืนห้อง[^0-9]{0,15}(\d{1,2})[:.](\d{2})/)
+          if (re) checkoutTime = formatHM(re[1], re[2], re[3])
+        }
+
+        if (!ogTitle && !ogImage && images.length === 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'ดึงข้อมูลไม่ได้ — เว็บไซต์ปลายทางอาจบล็อกการเข้าถึง',
+          })
+        }
+
+        return {
+          name: ogTitle ?? null,
+          description: ogDesc ?? null,
+          images: images.slice(0, 20), // cap to avoid bloat
+          bedrooms: bedrooms ?? null,
+          bathrooms: bathrooms ?? null,
+          maxGuests: guests ?? null,
+          checkinTime: checkinTime ?? null,
+          checkoutTime: checkoutTime ?? null,
+          source: new URL(res.url).hostname,
+        }
+      } catch (err) {
+        if (err instanceof TRPCError) throw err
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'ดึงข้อมูลไม่สำเร็จ — ตรวจสอบลิงก์หรือลองใหม่อีกครั้ง',
+        })
+      }
     }),
 })

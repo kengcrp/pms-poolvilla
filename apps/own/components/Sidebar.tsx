@@ -1,15 +1,23 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn, Icon, type IconName } from '@pms/ui'
 import { useT } from '@/lib/i18n'
+import { trpc } from '@/lib/trpc'
+
+/** localStorage key — timestamp (ms) of the last time the owner visited the
+ *  postpone page. Used to dim the badge once everything has been seen. */
+const POSTPONE_SEEN_KEY = 'pms.postpone.seenAt'
 
 interface MenuItem {
   href: string
   /** i18n key for label (looked up via useT) */
   labelKey: string
   icon: IconName
+  /** Slug used to look up a per-item live badge count (handled below). */
+  badgeKey?: 'postpone'
 }
 interface MenuGroup {
   /** i18n key for group title */
@@ -24,11 +32,10 @@ const menu: MenuGroup[] = [
       { href: '/manage/calendar', labelKey: 'menu.calendar', icon: 'calendar' },
       { href: '/manage/pricing', labelKey: 'menu.pricing', icon: 'money' },
       { href: '/manage/listings', labelKey: 'menu.listings', icon: 'home' },
-      { href: '/manage/postpone', labelKey: 'menu.postpone', icon: 'postpone' },
+      { href: '/manage/postpone', labelKey: 'menu.postpone', icon: 'postpone', badgeKey: 'postpone' },
       { href: '/manage/housekeeper', labelKey: 'menu.housekeeper', icon: 'broom' },
       { href: '/manage/coupons', labelKey: 'menu.coupons', icon: 'ticket' },
       { href: '/manage/accounting', labelKey: 'menu.accounting', icon: 'invoice' },
-      { href: '/manage/hotels', labelKey: 'menu.hotels', icon: 'bed' },
     ],
   },
   {
@@ -52,6 +59,47 @@ interface SidebarProps {
 export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const pathname = usePathname()
   const t = useT()
+
+  // Live badge counts — only fetch when feature is enabled. Owner procedure
+  // returns 0 when unauthenticated, so this is safe at the top level.
+  const { data: pendingPostpones } = trpc.booking.pendingPostponeCount.useQuery(
+    undefined,
+    { refetchOnWindowFocus: true, refetchInterval: 60_000 },
+  )
+
+  // Track when the owner last viewed the postpone page so the badge can dim
+  // (red → gray) once everything has been seen. Stamp on every visit.
+  const [postponeSeenAt, setPostponeSeenAt] = useState<number>(0)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw = localStorage.getItem(POSTPONE_SEEN_KEY)
+    setPostponeSeenAt(raw ? Number(raw) || 0 : 0)
+  }, [])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (pathname.startsWith('/manage/postpone')) {
+      const now = Date.now()
+      localStorage.setItem(POSTPONE_SEEN_KEY, String(now))
+      setPostponeSeenAt(now)
+    }
+  }, [pathname])
+
+  interface BadgeState {
+    count: number
+    /** When true, render gray (already viewed); when false, render red (new) */
+    seen: boolean
+  }
+  const badgeFor = (key?: 'postpone'): BadgeState | null => {
+    if (key === 'postpone') {
+      const count = pendingPostpones?.count ?? 0
+      const latestMs = pendingPostpones?.latestAt
+        ? new Date(pendingPostpones.latestAt).getTime()
+        : 0
+      const seen = postponeSeenAt >= latestMs && latestMs > 0
+      return { count, seen }
+    }
+    return null
+  }
 
   return (
     <>
@@ -102,6 +150,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
               <ul className="space-y-0.5">
                 {group.items.map((item) => {
                   const active = pathname.startsWith(item.href)
+                  const badge = badgeFor(item.badgeKey)
                   return (
                     <li key={item.href}>
                       <Link
@@ -115,7 +164,23 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                         )}
                       >
                         <Icon name={item.icon} fixedWidth className="size-4 text-gray-500" />
-                        <span>{t(item.labelKey)}</span>
+                        <span className="flex-1">{t(item.labelKey)}</span>
+                        {badge && badge.count > 0 && (
+                          <span
+                            className={cn(
+                              'inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none text-white',
+                              // Red = new / unseen items, Gray = all already viewed
+                              badge.seen ? 'bg-gray-400' : 'bg-red-500',
+                            )}
+                            title={
+                              badge.seen
+                                ? `${badge.count} รายการ (ดูแล้ว)`
+                                : `${badge.count} รายการรอจัดการ`
+                            }
+                          >
+                            {badge.count > 99 ? '99+' : badge.count}
+                          </span>
+                        )}
                       </Link>
                     </li>
                   )

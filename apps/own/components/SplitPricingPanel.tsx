@@ -124,9 +124,9 @@ export function SplitPricingPanel({ open, onClose, propertyId }: Props) {
                   <Card key={v.id} className="overflow-hidden">
                     <div className="border-b border-gray-100 px-4 pb-3 pt-4">
                       <h3 className="text-base font-bold text-red-600">{vName}</h3>
-                      <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-500">
-                        <Icon name="users" className="size-3 text-gray-400" />
-                        <span>สำหรับ {v.maxGuests} ท่าน</span>
+                      <div className="mt-1 flex items-center gap-1.5 text-xs font-medium text-gray-800">
+                        <Icon name="users" className="size-3 text-gray-600" />
+                        <span>สำหรับ <span className="font-semibold text-gray-900">{v.maxGuests}</span> ท่าน</span>
                       </div>
                     </div>
                     <div className="space-y-3 p-4">

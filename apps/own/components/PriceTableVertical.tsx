@@ -67,16 +67,19 @@ export function PriceTableVertical({ propertyId, onCellClick, priceMode: control
 
   return (
     <div>
-      {/* ราคาขาย / ส่ง Agent toggle — hidden when the caller owns the price-mode state */}
-      {!isControlled && (
-        <div className="mb-3 inline-flex rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
+      {/* ราคาขาย / ราคาส่ง toggle — same pill design as MiniCalendar (Layout 1) so all
+          layouts share a consistent control. Only shown when:
+          - caller doesn't own the state (isControlled = false), AND
+          - this property opted into ราคาส่ง Agent (partnerListing) */}
+      {!isControlled && data.property.partnerListing && (
+        <div className="mb-3 inline-flex rounded-full bg-gray-100 p-1 shadow-inner">
           <button
             type="button"
             onClick={() => setPriceMode('sell')}
             className={cn(
-              'rounded-lg px-4 py-1.5 text-sm font-semibold transition-all',
+              'rounded-full px-5 py-1.5 text-xs font-semibold transition-all',
               priceMode === 'sell'
-                ? 'bg-brand-50 text-brand-700'
+                ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/30'
                 : 'text-gray-500 hover:text-gray-700',
             )}
           >
@@ -86,14 +89,14 @@ export function PriceTableVertical({ propertyId, onCellClick, priceMode: control
             type="button"
             onClick={() => setPriceMode('agent')}
             className={cn(
-              'rounded-lg px-4 py-1.5 text-sm font-semibold transition-all',
+              'rounded-full px-5 py-1.5 text-xs font-semibold transition-all',
               priceMode === 'agent'
-                ? 'bg-brand-50 text-brand-700'
+                ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/30'
                 : 'text-gray-500 hover:text-gray-700',
             )}
             title="ราคาสำหรับ Agent (ฟีเจอร์เต็มอยู่ใน roadmap)"
           >
-            ส่ง Agent
+            ราคาส่ง
           </button>
         </div>
       )}
@@ -103,27 +106,36 @@ export function PriceTableVertical({ propertyId, onCellClick, priceMode: control
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-gray-200">
-                {/* Month navigator */}
-                <th colSpan={2} className="w-44 border-r border-gray-200 px-2 py-3">
-                  <div className="flex items-center justify-between">
+                {/* Month navigator — chevrons + label + วันนี้ all inside one framed pill */}
+                <th colSpan={2} className="border-r border-gray-200 px-2 py-3">
+                  <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1 py-0.5 shadow-xs">
                     <button
                       type="button"
                       onClick={() => nav(-1)}
-                      className="flex size-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"
+                      className="flex size-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
                       aria-label="เดือนก่อน"
                     >
                       <Icon name="chevronLeft" className="size-3.5" />
                     </button>
-                    <span className="text-sm font-semibold text-gray-700">
+                    <span className="px-2 text-sm font-bold tabular-nums text-gray-900">
                       {formatMonthLabel(view.year, view.month0)}
                     </span>
                     <button
                       type="button"
                       onClick={() => nav(1)}
-                      className="flex size-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"
+                      className="flex size-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
                       aria-label="เดือนถัดไป"
                     >
                       <Icon name="chevronRight" className="size-3.5" />
+                    </button>
+                    <span aria-hidden className="mx-0.5 h-4 w-px bg-gray-200" />
+                    <button
+                      type="button"
+                      onClick={() => setView(today)}
+                      className="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+                      title="กลับไปเดือนปัจจุบัน"
+                    >
+                      วันนี้
                     </button>
                   </div>
                 </th>
@@ -137,8 +149,9 @@ export function PriceTableVertical({ propertyId, onCellClick, priceMode: control
                       <div className="text-sm font-semibold text-red-600">
                         {isDefault ? 'เหมาหลัง' : 'แบ่งห้องนอน'}
                       </div>
-                      <div className="mt-1 text-[11px] font-normal text-gray-500">
-                        {v.variant.bedrooms} ห้องนอน, {v.variant.maxGuests} ท่าน
+                      <div className="mt-1 text-[11px] font-medium text-gray-800">
+                        <span className="font-semibold text-gray-900">{v.variant.bedrooms}</span> ห้องนอน,{' '}
+                        <span className="font-semibold text-gray-900">{v.variant.maxGuests}</span> ท่าน
                       </div>
                     </th>
                   )
@@ -150,28 +163,19 @@ export function PriceTableVertical({ propertyId, onCellClick, priceMode: control
                 const key = ymd(d)
                 const isToday = key === todayKey
                 const dow = d.getUTCDay()
-                const isSunday = dow === 0
-                const isSaturday = dow === 6
-                const isWeekend = isSunday || isSaturday
+                const isWeekend = dow === 0 || dow === 6
                 return (
                   <tr
                     key={key}
                     className={cn(
                       'border-b border-gray-100 last:border-b-0',
-                      // Highlight weekend rows with a light blue tint (Sunday darker than Saturday)
-                      isSunday && 'bg-sky-100/80',
-                      isSaturday && !isSunday && 'bg-sky-50/70',
-                      isToday && !isWeekend && 'bg-brand-50/40',
+                      isToday && 'bg-brand-50/40',
                     )}
                   >
                     <td
                       className={cn(
                         'w-12 border-r border-gray-200 px-2 py-2 text-center text-sm',
-                        isToday
-                          ? 'font-semibold text-brand-700'
-                          : isSunday
-                            ? 'font-semibold text-sky-900'
-                            : 'text-gray-600',
+                        isToday ? 'font-semibold text-brand-700' : 'text-gray-600',
                       )}
                     >
                       {i + 1}
@@ -180,11 +184,7 @@ export function PriceTableVertical({ propertyId, onCellClick, priceMode: control
                       className={cn(
                         'w-28 border-r border-gray-200 px-3 py-2 text-sm',
                         isWeekend && 'font-medium',
-                        isToday
-                          ? 'text-brand-700'
-                          : isSunday
-                            ? 'text-sky-900 font-semibold'
-                            : 'text-gray-700',
+                        isToday ? 'text-brand-700' : 'text-gray-700',
                       )}
                     >
                       {DOW_FULL[dow]}
@@ -288,6 +288,18 @@ export function PriceTableVertical({ propertyId, onCellClick, priceMode: control
                             {displayed === null ? (
                               <span className="inline-flex items-center justify-center text-gray-400" title="ยังไม่ได้ตั้งราคา / ปิดการขาย">
                                 <Icon name="lock" className="size-3.5" />
+                              </span>
+                            ) : priceType === 'DISCOUNT' &&
+                              day.originalPrice != null &&
+                              day.originalPrice > displayed ? (
+                              // Promo: original strikethrough + new price red
+                              <span className="inline-flex items-baseline gap-1.5">
+                                <span className="text-[11px] text-gray-400 line-through">
+                                  ฿{day.originalPrice.toLocaleString()}
+                                </span>
+                                <span className="font-bold text-red-600">
+                                  ฿{displayed.toLocaleString()}
+                                </span>
                               </span>
                             ) : (
                               <>฿{displayed.toLocaleString()}</>

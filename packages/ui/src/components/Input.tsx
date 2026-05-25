@@ -2,8 +2,8 @@ import * as React from 'react'
 import { cn } from '../cn'
 
 const PICKER_TYPES = new Set(['date', 'time', 'datetime-local', 'month', 'week'])
-// On focus, move the caret to the END of the value — for non-zero text editing.
-// Number inputs with a "0" value get cleared instead (see showEmpty logic below).
+// On focus, move the caret to the END of the value — for text editing.
+// Number inputs ALWAYS clear on focus (see showEmpty logic below) so caret positioning is N/A.
 const CARET_AT_END_TYPES = new Set(['text', 'tel', 'email', 'url', 'search', 'password'])
 
 export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
@@ -27,16 +27,18 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
     )
 
     // Number-input UX:
-    //   - When the field has value `0` (or "") and user focuses, blank it visually so they
-    //     can type fresh without backspacing the "0".
-    //   - `hasTyped` flips on the first keystroke so the next "0" the user types is preserved.
-    //   - For non-zero values (or non-number types), caret jumps to the end of the value
-    //     so the user can append/edit naturally.
+    //   - On focus, ALWAYS blank the field visually (regardless of current value) so the
+    //     user can type fresh without backspacing first. Underlying form state stays
+    //     unchanged until the user actually types — blurring without typing reverts to the
+    //     stored value via re-render (showEmpty flips off when focus is lost).
+    //   - `hasTyped` flips on the first keystroke so the typed value is shown immediately,
+    //     and a typed "0" is preserved (we no longer blank when it matches the prior value).
+    //   - For text-like inputs (text/email/tel/...), caret jumps to the end on focus so the
+    //     user can append/edit naturally instead of overwriting.
     const isNumber = type === 'number'
     const [focused, setFocused] = React.useState(false)
     const [hasTyped, setHasTyped] = React.useState(false)
-    const isZero = isNumber && (value === 0 || value === '0' || value === '')
-    const showEmpty = isNumber && focused && !hasTyped && isZero
+    const showEmpty = isNumber && focused && !hasTyped
     const displayValue = showEmpty
       ? ''
       : (value as React.InputHTMLAttributes<HTMLInputElement>['value'])
@@ -48,11 +50,9 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
         setHasTyped(false)
         onFocus?.(e)
         const effectiveType = type ?? 'text'
-        // Caret-at-end for text editing AND non-zero number values.
-        // (Number+zero gets cleared via showEmpty so caret positioning is N/A.)
+        // Caret-at-end only applies to text-like editing. Numbers are cleared on focus.
         const isTextLike = CARET_AT_END_TYPES.has(effectiveType)
-        const isNonZeroNumber = isNumber && !isZero
-        if ((isTextLike || isNonZeroNumber) && !e.defaultPrevented) {
+        if (isTextLike && !e.defaultPrevented) {
           const el = e.target
           requestAnimationFrame(() => {
             try {
@@ -66,7 +66,7 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
           })
         }
       },
-      [onFocus, type, isNumber, isZero],
+      [onFocus, type],
     )
 
     const handleBlur = React.useCallback(

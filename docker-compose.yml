@@ -1,0 +1,96 @@
+# PMS Pool Villa — production compose.
+# Run from the repo root on the server:
+#   cp .env.production.example .env && nano .env   # fill in secrets/domains
+#   docker compose up -d --build
+#   docker compose exec own pnpm --filter @pms/db prisma db push
+#   docker compose exec own pnpm --filter @pms/db tsx prisma/seed.ts
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: pms-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    networks: [pms]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  own:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: own
+        APP_PORT: "3001"
+    image: pms-own:latest
+    container_name: pms-own
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_URL: https://${OWN_DOMAIN}
+      NEXTAUTH_URL: https://${OWN_DOMAIN}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [pms]
+    expose: ["3001"]
+
+  m:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: m
+        APP_PORT: "3002"
+    image: pms-m:latest
+    container_name: pms-m
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_URL: https://${ADMIN_DOMAIN}
+      NEXTAUTH_URL: https://${ADMIN_DOMAIN}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [pms]
+    expose: ["3002"]
+
+  # Caddy = reverse proxy + automatic Let's Encrypt SSL.
+  # No nginx + certbot ceremony — just put domains in Caddyfile and Caddy
+  # provisions certs on first request and renews them automatically.
+  caddy:
+    image: caddy:2-alpine
+    container_name: pms-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      OWN_DOMAIN: ${OWN_DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN}
+    depends_on: [own, m]
+    networks: [pms]
+
+volumes:
+  db_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  pms:
+    driver: bridge

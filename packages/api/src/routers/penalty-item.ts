@@ -65,6 +65,41 @@ export const penaltyItemRouter = router({
     })
   }),
 
+  /** Batch create — used by the multi-row "เพิ่มรายการ" modal in the housekeeper page.
+   *  All items go to the same property. Auto-assigns sortOrder starting after the existing max. */
+  createMany: ownerProcedure
+    .input(
+      z.object({
+        propertyId: z.string(),
+        items: z
+          .array(
+            z.object({
+              name: z.string().min(1, 'กรุณาระบุชื่อ').max(120),
+              feePerPiece: z.number().nonnegative('ราคาต้องไม่ติดลบ'),
+            }),
+          )
+          .min(1, 'ต้องมีอย่างน้อย 1 รายการ'),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertPropertyOwn(input.propertyId, ctx.ownerId)
+      // Find current max sortOrder to append new ones at the end
+      const maxRow = await prisma.penaltyItem.findFirst({
+        where: { propertyId: input.propertyId },
+        orderBy: { sortOrder: 'desc' },
+        select: { sortOrder: true },
+      })
+      const baseSort = (maxRow?.sortOrder ?? 0) + 1
+      return prisma.penaltyItem.createMany({
+        data: input.items.map((it, i) => ({
+          propertyId: input.propertyId,
+          name: it.name,
+          feePerPiece: it.feePerPiece,
+          sortOrder: baseSort + i,
+        })),
+      })
+    }),
+
   update: ownerProcedure.input(updateSchema).mutation(async ({ ctx, input }) => {
     await assertItemOwn(input.id, ctx.ownerId)
     const { id, ...data } = input

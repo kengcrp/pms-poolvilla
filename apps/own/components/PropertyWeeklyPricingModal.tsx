@@ -18,6 +18,10 @@ interface Row {
   agentPrice: number
   splitOpen: boolean
   minStay: number
+  /** Guests included in `price` — 0/null = use the variant's maxGuests as default */
+  includedGuests: number
+  /** Per-extra-guest fee. 0 = ไม่คิดค่าท่านเพิ่ม */
+  extraGuestFee: number
 }
 
 /**
@@ -59,6 +63,9 @@ export function PropertyWeeklyPricingModal({ open, onClose, propertyId }: Props)
           agentPrice: w?.agentPrice ? Number(w.agentPrice) : 0,
           splitOpen: w?.splitOpen ?? true,
           minStay: w?.minStay ?? 1,
+          // null/0 → default to variant maxGuests so the UI always shows something useful
+          includedGuests: w?.includedGuests ?? v.maxGuests,
+          extraGuestFee: w?.extraGuestFee ? Number(w.extraGuestFee) : 0,
         }
       })
       guests[v.id] = v.maxGuests
@@ -106,6 +113,9 @@ export function PropertyWeeklyPricingModal({ open, onClose, propertyId }: Props)
               agentPrice: partnerListing ? (r.agentPrice || null) : null,
               minStay: r.minStay,
               splitOpen: r.splitOpen,
+              // 0 / equal-to-maxGuests → null (use variant default); otherwise persist
+              includedGuests: r.includedGuests && r.includedGuests > 0 ? r.includedGuests : null,
+              extraGuestFee: r.extraGuestFee > 0 ? r.extraGuestFee : null,
             })),
           }),
         )
@@ -180,26 +190,65 @@ export function PropertyWeeklyPricingModal({ open, onClose, propertyId }: Props)
               </div>
             </div>
 
-            {/* guests_count for active variant */}
-            <div>
-              <Label>
-                <span className="inline-flex items-center gap-1.5">
-                  <Icon name="users" className="size-3.5 text-gray-400" />
-                  จำนวนผู้เข้าพัก
-                </span>
-              </Label>
-              <Input
-                type="number"
-                min={1}
-                max={100}
-                value={activeMaxGuests ?? 1}
-                onChange={(e) =>
-                  setGuestsByVariant((prev) => ({
-                    ...prev,
-                    [activeVariantId]: Math.max(1, Number(e.target.value || 1)),
-                  }))
-                }
-              />
+            {/* Guest capacity & extra-guest pricing
+                - รองรับสูงสุด = absolute max (PropertyVariant.maxGuests)
+                - รวมในราคา   = guests included in base price (VariantWeeklyPricing.includedGuests, written to all 7 DOWs)
+                - ค่าท่านเพิ่ม = fee per guest above รวมในราคา (VariantWeeklyPricing.extraGuestFee) */}
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
+                <Icon name="users" className="size-3.5 text-gray-500" />
+                จำนวนผู้เข้าพัก
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <Label>รองรับสูงสุด (ท่าน)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={activeMaxGuests ?? 1}
+                    onChange={(e) =>
+                      setGuestsByVariant((prev) => ({
+                        ...prev,
+                        [activeVariantId]: Math.max(1, Number(e.target.value || 1)),
+                      }))
+                    }
+                  />
+                  <p className="mt-1 text-[10.5px] text-gray-500">เพดานสูงสุดที่บ้านรับได้</p>
+                </div>
+                <div>
+                  <Label>รวมในราคา (ท่าน)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={activeMaxGuests ?? 100}
+                    value={activeRows?.[0]?.includedGuests ?? activeMaxGuests ?? 1}
+                    onChange={(e) => {
+                      const inc = Math.max(1, Number(e.target.value || 1))
+                      // Write the same value to all 7 DOW rows so the weekly form keeps a single source
+                      setRowsByVariant((prev) => ({
+                        ...prev,
+                        [activeVariantId]: (prev[activeVariantId] ?? []).map((r) => ({ ...r, includedGuests: inc })),
+                      }))
+                    }}
+                  />
+                  <p className="mt-1 text-[10.5px] text-gray-500">จำนวนท่านที่ราคาขายครอบคลุม</p>
+                </div>
+                <div>
+                  <Label>ค่าท่านเพิ่ม / ท่าน (฿)</Label>
+                  <NumberInput
+                    value={activeRows?.[0]?.extraGuestFee ?? 0}
+                    placeholder="0"
+                    onChange={(v) => {
+                      setRowsByVariant((prev) => ({
+                        ...prev,
+                        [activeVariantId]: (prev[activeVariantId] ?? []).map((r) => ({ ...r, extraGuestFee: v })),
+                      }))
+                    }}
+                  />
+                  <p className="mt-1 text-[10.5px] text-gray-500">คิดเพิ่มเฉพาะท่านที่เกิน "รวมในราคา"</p>
+                </div>
+              </div>
             </div>
 
             {/* Per-day grid */}

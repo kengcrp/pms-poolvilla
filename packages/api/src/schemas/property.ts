@@ -18,6 +18,8 @@ export const propertyCreateSchema = z.object({
   totalBathrooms: z.number().int().min(0).max(50),
   areaSqwa: z.number().nonnegative().optional(),
   contactInfo: z.string().optional(),
+  /** Show "ราคาส่ง Agent" rows in pricing / calendar — set during onboarding */
+  partnerListing: z.boolean().optional(),
   // Initial default variant (full villa)
   defaultVariantName: z.string().min(1).optional(),
   defaultVariantMaxGuests: z.number().int().min(1).max(100),

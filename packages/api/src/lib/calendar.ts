@@ -36,6 +36,9 @@ export type CalendarDay = {
   status: CalendarStatus
   /** Discount / Special tag if override has priceType set. */
   priceType: PriceOverrideType | null
+  /** Pre-discount original price — only present when priceType=DISCOUNT and the
+   *  owner has captured an "original" reference (e.g. 20,000 → 15,000 promo). */
+  originalPrice: number | null
   note: string | null
   bookingId: string | null
   /** Customer name if this day is linked to a booking. Useful for UI labels. */
@@ -181,6 +184,7 @@ export async function getCalendarRange(
         splitOpen,
         status: ov.status,
         priceType: ov.priceType,
+        originalPrice: ov.originalPrice != null ? Number(ov.originalPrice) : null,
         note: ov.note,
         bookingId: ov.bookingId,
         customerName: ov.bookingId ? (customerByBookingId.get(ov.bookingId) ?? null) : null,
@@ -199,6 +203,7 @@ export async function getCalendarRange(
       splitOpen,
       status: 'OPEN' as CalendarStatus,
       priceType: null,
+      originalPrice: null,
       note: null,
       bookingId: null,
       customerName: null,

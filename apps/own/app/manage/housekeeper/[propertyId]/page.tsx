@@ -40,54 +40,82 @@ export default function HousekeeperDetailPage() {
     : ''
 
   // ── Penalty item modals ─────────────────────────────────────
-  const [itemModal, setItemModal] = useState<
-    | { mode: 'create' }
-    | { mode: 'edit'; id: string; name: string; feePerPiece: number }
+  // Two distinct modals:
+  //  - create: multi-row batch add (matches the "add_penalty_item" UX from the design)
+  //  - edit:   single-row update on an existing item
+  type DraftRow = { id: number; name: string; feePerPiece: number; nameError?: boolean }
+  const [editModal, setEditModal] = useState<
+    | { id: string; name: string; feePerPiece: number }
     | null
   >(null)
-  const [itemForm, setItemForm] = useState({ name: '', feePerPiece: 0 })
+  const [editForm, setEditForm] = useState({ name: '', feePerPiece: 0 })
+
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createRows, setCreateRows] = useState<DraftRow[]>([])
+  const [createError, setCreateError] = useState<string | null>(null)
 
   function openCreate() {
-    setItemModal({ mode: 'create' })
-    setItemForm({ name: '', feePerPiece: 0 })
+    // Always start with one empty row so the modal isn't blank
+    setCreateRows([{ id: Date.now(), name: '', feePerPiece: 0 }])
+    setCreateError(null)
+    setCreateOpen(true)
   }
+  function addRow() {
+    setCreateRows((rows) => [...rows, { id: Date.now() + rows.length, name: '', feePerPiece: 0 }])
+  }
+  function updateRow(id: number, patch: Partial<DraftRow>) {
+    setCreateRows((rows) => rows.map((r) => (r.id === id ? { ...r, ...patch, nameError: false } : r)))
+  }
+  function removeRow(id: number) {
+    setCreateRows((rows) => (rows.length <= 1 ? rows : rows.filter((r) => r.id !== id)))
+  }
+
   function openEdit(it: (typeof items)[number]) {
-    setItemModal({ mode: 'edit', id: it.id, name: it.name, feePerPiece: it.feePerPiece })
-    setItemForm({ name: it.name, feePerPiece: it.feePerPiece })
+    setEditModal({ id: it.id, name: it.name, feePerPiece: it.feePerPiece })
+    setEditForm({ name: it.name, feePerPiece: it.feePerPiece })
   }
 
   const invalidatePenalty = () => utils.penaltyItem.listByProperty.invalidate({ propertyId })
 
-  const createItem = trpc.penaltyItem.create.useMutation({
+  const createMany = trpc.penaltyItem.createMany.useMutation({
     onSuccess: () => {
       invalidatePenalty()
-      setItemModal(null)
+      setCreateOpen(false)
     },
+    onError: (e) => setCreateError(e.message),
   })
   const updateItem = trpc.penaltyItem.update.useMutation({
     onSuccess: () => {
       invalidatePenalty()
-      setItemModal(null)
+      setEditModal(null)
     },
   })
   const deleteItem = trpc.penaltyItem.delete.useMutation({ onSuccess: invalidatePenalty })
 
-  function submitItem() {
-    if (!itemModal) return
-    if (!itemForm.name.trim()) return
-    if (itemModal.mode === 'create') {
-      createItem.mutate({
-        propertyId,
-        name: itemForm.name.trim(),
-        feePerPiece: itemForm.feePerPiece,
-      })
-    } else {
-      updateItem.mutate({
-        id: itemModal.id,
-        name: itemForm.name.trim(),
-        feePerPiece: itemForm.feePerPiece,
-      })
+  function submitCreate() {
+    setCreateError(null)
+    // Drop rows with empty name (treated as blanks the user didn't fill)
+    const valid = createRows.filter((r) => r.name.trim().length > 0)
+    if (valid.length === 0) {
+      // Mark first row as error so user sees what to fix
+      setCreateRows((rows) => rows.map((r, i) => (i === 0 ? { ...r, nameError: true } : r)))
+      setCreateError('กรุณากรอกชื่อรายการอย่างน้อย 1 รายการ')
+      return
     }
+    createMany.mutate({
+      propertyId,
+      items: valid.map((r) => ({ name: r.name.trim(), feePerPiece: r.feePerPiece || 0 })),
+    })
+  }
+
+  function submitEdit() {
+    if (!editModal) return
+    if (!editForm.name.trim()) return
+    updateItem.mutate({
+      id: editModal.id,
+      name: editForm.name.trim(),
+      feePerPiece: editForm.feePerPiece,
+    })
   }
 
   // ── Housekeeping tasks ──────────────────────────────────────
@@ -338,11 +366,95 @@ export default function HousekeeperDetailPage() {
         </Card>
       )}
 
-      {/* Penalty item modal — create/edit */}
+      {/* Penalty item — CREATE (multi-row batch add)
+          Each row = one penalty item. User can add as many as needed and submit at once.
+          Empty-name rows are dropped on submit so the user can leave extra blank rows. */}
       <Modal
-        open={!!itemModal}
-        onClose={() => setItemModal(null)}
-        title={itemModal?.mode === 'edit' ? 'แก้ไขรายการค่าปรับ' : 'เพิ่มรายการค่าปรับ'}
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="เพิ่มรายการค่าปรับ"
+        description={propertyName}
+        size="md"
+      >
+        <ModalBody>
+          <div className="space-y-5">
+            {createRows.map((row, idx) => (
+              <div key={row.id} className="rounded-xl border border-gray-200 bg-gray-50/40 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="text-sm font-bold text-gray-900">รายการที่ {idx + 1}</div>
+                  <button
+                    type="button"
+                    onClick={() => removeRow(row.id)}
+                    disabled={createRows.length <= 1}
+                    className={cn(
+                      'flex size-8 items-center justify-center rounded-lg transition-colors',
+                      createRows.length <= 1
+                        ? 'cursor-not-allowed text-gray-300'
+                        : 'text-gray-400 hover:bg-red-50 hover:text-red-600',
+                    )}
+                    title={createRows.length <= 1 ? 'ต้องมีอย่างน้อย 1 รายการ' : 'ลบรายการนี้'}
+                  >
+                    <Icon name="trash" className="size-4" />
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <Label required>ชื่อรายการ</Label>
+                    <Input
+                      value={row.name}
+                      onChange={(e) => updateRow(row.id, { name: e.target.value })}
+                      placeholder="เช่น หลอดไฟ, รีโมท, ผ้าเช็ดตัว"
+                      className={cn(row.nameError && 'border-red-400 focus:border-red-500 focus:ring-red-200')}
+                    />
+                  </div>
+                  <div>
+                    <Label>ค่าบริการต่อชิ้น (฿)</Label>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      value={row.feePerPiece}
+                      onChange={(e) =>
+                        updateRow(row.id, { feePerPiece: Number(e.target.value || 0) })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <button
+              type="button"
+              onClick={addRow}
+              className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-white px-4 py-2 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+            >
+              <Icon name="plus" className="size-3.5" />
+              เพิ่มรายการ
+            </button>
+
+            {createError && (
+              <div className="rounded-lg bg-red-50 px-3.5 py-2.5 text-sm text-red-700 ring-1 ring-inset ring-red-200">
+                {createError}
+              </div>
+            )}
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setCreateOpen(false)}>
+            ปิด
+          </Button>
+          <Button onClick={submitCreate} disabled={createMany.isPending}>
+            {createMany.isPending ? 'กำลังบันทึก...' : 'ยืนยัน'}
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Penalty item — EDIT (single row) */}
+      <Modal
+        open={!!editModal}
+        onClose={() => setEditModal(null)}
+        title="แก้ไขรายการค่าปรับ"
+        description={propertyName}
         size="sm"
       >
         <ModalBody>
@@ -350,34 +462,29 @@ export default function HousekeeperDetailPage() {
             <div>
               <Label required>ชื่อรายการ</Label>
               <Input
-                value={itemForm.name}
-                onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                 placeholder="เช่น หลอดไฟ, รีโมท, ผ้าเช็ดตัว"
               />
             </div>
             <div>
-              <Label required>ค่าบริการต่อชิ้น (฿)</Label>
+              <Label>ค่าบริการต่อชิ้น (฿)</Label>
               <Input
                 type="number"
                 inputMode="numeric"
                 min={0}
-                value={itemForm.feePerPiece}
-                onChange={(e) =>
-                  setItemForm({ ...itemForm, feePerPiece: Number(e.target.value || 0) })
-                }
+                value={editForm.feePerPiece}
+                onChange={(e) => setEditForm({ ...editForm, feePerPiece: Number(e.target.value || 0) })}
               />
             </div>
           </div>
         </ModalBody>
         <ModalFooter>
-          <Button variant="secondary" onClick={() => setItemModal(null)}>
+          <Button variant="secondary" onClick={() => setEditModal(null)}>
             ยกเลิก
           </Button>
-          <Button
-            onClick={submitItem}
-            disabled={createItem.isPending || updateItem.isPending}
-          >
-            {createItem.isPending || updateItem.isPending ? 'กำลังบันทึก...' : 'บันทึก'}
+          <Button onClick={submitEdit} disabled={updateItem.isPending}>
+            {updateItem.isPending ? 'กำลังบันทึก...' : 'บันทึก'}
           </Button>
         </ModalFooter>
       </Modal>

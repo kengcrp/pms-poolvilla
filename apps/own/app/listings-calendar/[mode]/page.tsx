@@ -1,12 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { trpc } from '@/lib/trpc'
 import { Button, Card, Icon, Input, cn } from '@pms/ui'
 import { MiniCalendar } from '@/components/MiniCalendar'
-import { BookingModal } from '@/components/BookingModal'
 import { StatusLegend } from '@/components/StatusLegend'
 import { SplitRoomBadge } from '@/components/SplitRoomBadge'
 import { SplitCalendarPanel } from '@/components/SplitCalendarPanel'
@@ -34,7 +32,7 @@ export default function ListingsCalendarPage() {
   const slug = data?.ownerSaleSlug
 
   const [search, setSearch] = useState('')
-  const [modal, setModal] = useState<{ variantId: string; label: string; date: Date } | null>(null)
+  // Split panel — opens when user clicks the "แบ่งห้อง N ›" pill (view-only mode)
   const [splitPanel, setSplitPanel] = useState<{ propertyId: string } | null>(null)
 
   const filtered = useMemo(() => {
@@ -52,18 +50,7 @@ export default function ListingsCalendarPage() {
   }, [])
 
   return (
-    <div className="mx-auto max-w-[100rem]">
-      {/* Back link */}
-      <div className="mb-3">
-        <Link
-          href="/manage/listings"
-          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
-        >
-          <Icon name="chevronLeft" className="size-3.5" />
-          กลับไปลิสติ้งที่พัก
-        </Link>
-      </div>
-
+    <div className="mx-auto max-w-[110rem]">
       {/* Header — title only */}
       <div className="mb-5">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">{meta.title}</h1>
@@ -100,69 +87,100 @@ export default function ListingsCalendarPage() {
       )}
 
       {/* Property card grid */}
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((p) => {
           const name = (p.name as { th?: string })?.th ?? p.code
           const cover = p.images[0]?.url
           const defaultVariant = p.variants.find((v) => v.isDefault)
           if (!defaultVariant) return null
-          const defaultVarName =
-            (defaultVariant.name as { th?: string })?.th ?? `${defaultVariant.bedrooms} ห้องนอน`
+          // All split variants fully Locked → badge becomes view-only with lock icon
+          const splitVariants = p.variants.filter((v) => !v.isDefault)
+          const splitLocked =
+            splitVariants.length > 0 &&
+            splitVariants.every((v) => {
+              const w = v.weeklyPricing ?? []
+              return w.length > 0 && w.every((row) => row.splitOpen === false)
+            })
           return (
-            <div key={p.id} className="flex flex-col">
-              {p.variants.length > 1 && (
-                <div className="flex justify-end">
+            <div key={p.id} className="flex h-full flex-col">
+              {/* Badge row — always rendered to keep card tops aligned across the grid.
+                  When the property has no split variants, an invisible badge clone reserves
+                  identical vertical space so neighboring cards don't shift up. */}
+              <div className="flex justify-end">
+                {p.variants.length > 1 ? (
                   <SplitRoomBadge
                     count={p.variants.length}
-                    onClick={() => setSplitPanel({ propertyId: p.id })}
+                    locked={splitLocked}
+                    onClick={
+                      splitLocked ? undefined : () => setSplitPanel({ propertyId: p.id })
+                    }
                   />
-                </div>
-              )}
-              <Card hover>
-                <div className="p-3">
-                  <div className="relative aspect-[16/9] overflow-hidden rounded-xl bg-gradient-to-br from-brand-100 to-brand-300">
+                ) : (
+                  <div className="invisible" aria-hidden>
+                    <SplitRoomBadge count={1} />
+                  </div>
+                )}
+              </div>
+              <Card hover className="flex h-full flex-col">
+                {/* Compact landscape cover (aspect 16/7) + tighter padding so the card stays
+                    short — same dimensions as calendar/pricing Layout 1. Name overlays the
+                    bottom-left as a frosted dark chip. */}
+                <div className="p-2">
+                  <div className="relative aspect-[16/7] overflow-hidden rounded-lg bg-gradient-to-br from-brand-100 to-brand-300">
                     {cover ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={cover} alt={name} className="size-full object-cover" />
                     ) : (
                       <div className="flex size-full items-center justify-center text-white/60">
-                        <Icon name="home" className="size-12" />
+                        <Icon name="home" className="size-9" />
                       </div>
                     )}
+                    {/* Name overlay — frosted dark chip */}
+                    <div className="pointer-events-none absolute bottom-2 left-2 right-2">
+                      <h3 className="inline-block max-w-full truncate rounded-md bg-black/65 px-2.5 py-1 text-sm font-semibold leading-tight text-white shadow-md ring-1 ring-inset ring-white/10 backdrop-blur-md">
+                        {name}
+                      </h3>
+                    </div>
                   </div>
                 </div>
 
-                <div className="space-y-3 px-5 pb-5">
+                <div className="space-y-2 px-3 pb-3 pt-1">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="truncate text-base font-semibold text-gray-900">{name}</h3>
+                    <div className="flex items-center gap-2 text-xs font-medium text-gray-800">
+                      <span className="inline-flex items-center gap-1">
+                        <Icon name="bed" className="size-3 text-gray-600" />
+                        <span className="font-semibold text-gray-900">{defaultVariant.bedrooms}</span> นอน
+                      </span>
+                      <span className="text-gray-300">·</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Icon name="users" className="size-3 text-gray-600" />
+                        <span className="font-semibold text-gray-900">{defaultVariant.maxGuests}</span> ท่าน
+                      </span>
+                    </div>
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm shadow-brand-600/20 transition-colors hover:bg-brand-700"
-                      title="รีเฟรชปฏิทิน"
+                      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-600 px-2.5 py-1 text-[10.5px] font-semibold text-white shadow-sm shadow-brand-600/20 transition-colors hover:bg-brand-700"
+                      title={`รีเฟรชปฏิทิน — อัปเดตล่าสุด ${fmtUpdated}`}
                     >
-                      <Icon name="refresh" className="size-3" />
-                      อัปเดตปฏิทิน {fmtUpdated}
+                      <Icon name="refresh" className="size-2.5" />
+                      {fmtUpdated}
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-3 text-xs text-gray-500">
-                    <span className="inline-flex items-center gap-1 text-brand-600">
-                      <Icon name="users" className="size-3" />
-                      <span className="text-gray-600">สำหรับ {defaultVariant.maxGuests} ท่าน</span>
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-brand-600">
-                      <Icon name="bed" className="size-3" />
-                      <span className="text-gray-600">{defaultVariant.bedrooms} ห้องนอน</span>
-                    </span>
-                  </div>
-
+                  {/* View-only + privacy — no PII in share view.
+                      Mode-specific pricing:
+                       - sell      → show regular ราคาขาย
+                       - wholesale → show ราคาส่ง Agent (initialPriceMode='agent')
+                       - hide      → no prices at all (hidePrices=true) */}
                   <MiniCalendar
                     variantId={defaultVariant.id}
                     showPriceModeToggle={false}
                     bookingWindowMonths={p.bookingWindowMonths}
-                    onCellClick={(date) =>
-                      setModal({ variantId: defaultVariant.id, label: `${name} — ${defaultVarName}`, date })
-                    }
+                    hideCustomerName
+                    hidePrices={mode === 'hide'}
+                    initialPriceMode={mode === 'wholesale' ? 'agent' : 'sell'}
+                    partnerListing={p.partnerListing}
+                    dense
                   />
                 </div>
               </Card>
@@ -171,18 +189,15 @@ export default function ListingsCalendarPage() {
         })}
       </div>
 
-      <BookingModal
-        open={!!modal}
-        onClose={() => setModal(null)}
-        variantId={modal?.variantId ?? null}
-        variantLabel={modal?.label ?? ''}
-        initialDate={modal?.date ?? null}
-      />
-
+      {/* Read-only split panel — slides in from right, shows variant calendars (no cell clicks).
+          Same mode-aware pricing rules as the main grid. */}
       <SplitCalendarPanel
         open={!!splitPanel}
         onClose={() => setSplitPanel(null)}
         propertyId={splitPanel?.propertyId ?? null}
+        readOnly
+        hidePrices={mode === 'hide'}
+        initialPriceMode={mode === 'wholesale' ? 'agent' : 'sell'}
       />
 
       {/* Suppress unused-warning */}

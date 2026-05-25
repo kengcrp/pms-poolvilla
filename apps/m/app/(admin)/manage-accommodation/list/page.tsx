@@ -2,17 +2,35 @@ import { prisma } from '@pms/db'
 import { Badge, Icon } from '@pms/ui'
 import { PageHeader } from '@/components/PageHeader'
 
+/**
+ * Load properties + their owners.
+ * Owner is fetched in a separate query (not via `include`) because Prisma throws when a
+ * required relation has an orphan row (Property.ownerId points to a deleted User). With
+ * a separate query, we can fall back gracefully when an owner is missing.
+ */
 async function loadProperties() {
-  return prisma.property.findMany({
+  const properties = await prisma.property.findMany({
     where: { deletedAt: null },
     orderBy: { createdAt: 'desc' },
     take: 50,
     include: {
-      owner: { select: { name: true, email: true } },
       location: { include: { location: true, zone: true } },
       _count: { select: { variants: true, bookings: { where: { deletedAt: null } } } },
     },
   })
+  const ownerIds = Array.from(new Set(properties.map((p) => p.ownerId)))
+  const owners = ownerIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: ownerIds } },
+        select: { id: true, name: true, email: true },
+      })
+    : []
+  const ownerById = new Map(owners.map((o) => [o.id, o]))
+  return properties.map((p) => ({
+    ...p,
+    // Owner may be null if the user row was deleted — the page renders "—" in that case
+    owner: ownerById.get(p.ownerId) ?? null,
+  }))
 }
 
 export default async function Page() {
@@ -63,8 +81,16 @@ export default async function Page() {
                     </div>
                   </div>
                   <div className="text-sm text-gray-700 md:col-span-3">
-                    <div className="truncate">{p.owner.name ?? '—'}</div>
-                    <div className="truncate text-[11px] text-gray-400">{p.owner.email}</div>
+                    {p.owner ? (
+                      <>
+                        <div className="truncate">{p.owner.name ?? '—'}</div>
+                        <div className="truncate text-[11px] text-gray-400">{p.owner.email}</div>
+                      </>
+                    ) : (
+                      <div className="truncate text-[11px] italic text-amber-600" title={`ownerId: ${p.ownerId}`}>
+                        — เจ้าของถูกลบ —
+                      </div>
+                    )}
                   </div>
                   <div className="text-sm text-gray-700 md:col-span-2">
                     {p.location?.location.name ?? '—'}

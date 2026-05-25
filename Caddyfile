@@ -1,0 +1,29 @@
+# Caddy proxies the two Next.js apps and auto-provisions Let's Encrypt certs.
+# Domains are pulled from env vars (set in .env and forwarded by compose).
+
+{$OWN_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy own:3001 {
+		header_up Host {host}
+		header_up X-Real-IP {remote}
+		header_up X-Forwarded-For {remote}
+		header_up X-Forwarded-Proto {scheme}
+	}
+	# Large image uploads (base64-encoded MEDIUMTEXT can reach ~16MB)
+	request_body {
+		max_size 25MB
+	}
+}
+
+{$ADMIN_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy m:3002 {
+		header_up Host {host}
+		header_up X-Real-IP {remote}
+		header_up X-Forwarded-For {remote}
+		header_up X-Forwarded-Proto {scheme}
+	}
+	request_body {
+		max_size 25MB
+	}
+}

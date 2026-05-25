@@ -35,8 +35,15 @@ export const propertyRouter = router({
         orderBy: { createdAt: 'desc' },
         include: {
           location: { include: { location: true, zone: true } },
-          images: { where: { type: 'cover' }, take: 1 },
-          variants: { orderBy: { sortOrder: 'asc' } },
+          // Prefer a cover image, but fall back to any uploaded photo so picker
+          // cards still show a thumbnail when the owner hasn't set a cover yet.
+          // Ordering: cover first (alphabetical 'c' < 't' < 'g' for cover/tour/gallery
+          // doesn't apply universally, so we sort by type and then sortOrder).
+          images: { orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }], take: 1 },
+          variants: {
+            orderBy: { sortOrder: 'asc' },
+            include: { weeklyPricing: { select: { dayOfWeek: true, splitOpen: true } } },
+          },
           _count: { select: { bookings: { where: { deletedAt: null } } } },
         },
       }),
@@ -66,6 +73,23 @@ export const propertyRouter = router({
     })
   }),
 
+  /** Look up a property by its human-readable `code` (e.g. TN-001) — scoped to the current owner.
+   *  Used by per-property share URLs like /listings-calendar/[mode]/[code] which prefer code over cuid. */
+  byCode: ownerProcedure.input(z.object({ code: z.string() })).query(async ({ ctx, input }) => {
+    const property = await prisma.property.findFirst({
+      where: { code: input.code, ownerId: ctx.ownerId, deletedAt: null },
+      include: {
+        variants: {
+          orderBy: { sortOrder: 'asc' },
+          include: { weeklyPricing: { select: { dayOfWeek: true, splitOpen: true } } },
+        },
+        images: { where: { type: 'cover' }, take: 1 },
+      },
+    })
+    if (!property) throw new TRPCError({ code: 'NOT_FOUND', message: 'ไม่พบที่พัก' })
+    return property
+  }),
+
   create: ownerProcedure.input(propertyCreateSchema).mutation(async ({ ctx, input }) => {
     const code = await generatePropertyCode()
     const property = await prisma.$transaction(async (tx) => {
@@ -79,6 +103,7 @@ export const propertyRouter = router({
           totalBathrooms: input.totalBathrooms,
           areaSqwa: input.areaSqwa,
           contactInfo: input.contactInfo,
+          partnerListing: input.partnerListing ?? false,
           reviewStatus: 'ACTIVE', // owner self-publish (no admin review in MVP)
           isActive: true,
         },

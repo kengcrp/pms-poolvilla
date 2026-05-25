@@ -16,6 +16,24 @@ interface Props {
   /** When true (default false = the "เหมาหลัง" variant), per-day Lock toggles
    *  in the weekly modal hide the price on that day for this variant. */
   isSplitVariant?: boolean
+  /** Hide customer name in booking strips — show only generic status labels.
+   *  Used by the share-friendly /listings-calendar view (no PII). */
+  hideCustomerName?: boolean
+  /** Property-level "ราคาส่ง Agent" toggle (from Property.partnerListing).
+   *  When false, the ราคาขาย / ราคาส่ง switch above the calendar is hidden entirely
+   *  (the property simply doesn't sell wholesale). Default false → opt-in. */
+  partnerListing?: boolean
+  /** Hide ALL price information from cells — calendar still shows dates + booking status,
+   *  but no ฿X.XX text appears anywhere. Used by /listings-calendar/hide share view. */
+  hidePrices?: boolean
+  /** Initial price-mode selection. Defaults to 'sell'. Pass 'agent' for the wholesale share view. */
+  initialPriceMode?: 'sell' | 'agent'
+  /** Controlled price mode — when set, the internal toggle is hidden (the caller owns the
+   *  state and renders its own toggle, e.g. on a property card's meta row). */
+  priceMode?: 'sell' | 'agent'
+  /** Compact mode — reduces cell height for grids where space is at a premium (Layout 1
+   *  property cards). Cells still show dates, prices, and booking strips clearly. */
+  dense?: boolean
 }
 
 /**
@@ -29,13 +47,23 @@ export function MiniCalendar({
   showPriceModeToggle = true,
   bookingWindowMonths = null,
   isSplitVariant = false,
+  hideCustomerName = false,
+  partnerListing = false,
+  hidePrices = false,
+  initialPriceMode = 'sell',
+  priceMode: controlledPriceMode,
+  dense = false,
 }: Props) {
   const today = useMemo(() => {
     const d = new Date()
     return { year: d.getUTCFullYear(), month0: d.getUTCMonth() }
   }, [])
   const [view, setView] = useState(today)
-  const [priceMode, setPriceMode] = useState<'sell' | 'agent'>('sell')
+  const [internalPriceMode, setInternalPriceMode] = useState<'sell' | 'agent'>(initialPriceMode)
+  // If caller passes a controlled `priceMode`, use it; otherwise own state internally.
+  const priceMode = controlledPriceMode ?? internalPriceMode
+  const isPriceModeControlled = controlledPriceMode !== undefined
+  const setPriceMode = setInternalPriceMode
 
   const grid = useMemo(() => buildMonthGrid(view.year, view.month0), [view])
   const from = grid[0]!.date
@@ -229,24 +257,35 @@ export function MiniCalendar({
 
   return (
     <div className="w-full">
-      {/* selling_price / send_agent toggle */}
-      {showPriceModeToggle && (
-        <div className="mb-3 inline-flex w-full rounded-full bg-gray-100 p-1 shadow-inner">
+      {/* selling_price / send_agent toggle — only ACTUALLY rendered when this property
+          opted into ราคาส่ง Agent (partnerListing). When the caller wants the toggle area
+          (showPriceModeToggle) but the property hasn't opted in, an invisible placeholder
+          keeps the calendar's total height consistent across cards in the same grid.
+          Hidden entirely when the parent controls priceMode (renders its own toggle). */}
+      {showPriceModeToggle && !isPriceModeControlled && (
+        <div
+          className={cn(
+            'mb-3 inline-flex w-full rounded-full bg-gray-100 p-1 shadow-inner',
+            !partnerListing && 'invisible',
+          )}
+          aria-hidden={!partnerListing}
+        >
           <button
             type="button"
-            onClick={() => setPriceMode('sell')}
+            onClick={() => partnerListing && setPriceMode('sell')}
             className={cn(
               'flex-1 rounded-full px-4 py-1.5 text-xs font-semibold transition-all',
               priceMode === 'sell'
                 ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/30'
                 : 'text-gray-500 hover:text-gray-700',
             )}
+            tabIndex={partnerListing ? 0 : -1}
           >
             ราคาขาย
           </button>
           <button
             type="button"
-            onClick={() => setPriceMode('agent')}
+            onClick={() => partnerListing && setPriceMode('agent')}
             className={cn(
               'flex-1 rounded-full px-4 py-1.5 text-xs font-semibold transition-all',
               priceMode === 'agent'
@@ -254,33 +293,47 @@ export function MiniCalendar({
                 : 'text-gray-500 hover:text-gray-700',
             )}
             title="ราคาสำหรับ Agent (ฟีเจอร์เต็มอยู่ใน roadmap)"
+            tabIndex={partnerListing ? 0 : -1}
           >
             ราคาส่ง
           </button>
         </div>
       )}
 
-      {/* Month nav */}
-      <div className="mb-2 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => nav(-1)}
-          className="flex size-8 items-center justify-center rounded-full bg-white text-gray-500 ring-1 ring-gray-200 transition-colors hover:bg-gray-50 hover:text-gray-700"
-          aria-label="เดือนก่อน"
-        >
-          <Icon name="chevronLeft" className="size-3.5" />
-        </button>
-        <div className="text-sm font-bold text-gray-900">
-          {THAI_MONTHS[view.month0]} {view.year + 543}
+      {/* Month nav — all controls (◀ month ▶ + วันนี้) live inside ONE framed pill,
+          centered on the row so it reads as a single grouped control. */}
+      <div className="mb-3 flex items-center justify-center">
+        <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1 py-0.5 shadow-xs">
+          <button
+            type="button"
+            onClick={() => nav(-1)}
+            className="flex size-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+            aria-label="เดือนก่อน"
+          >
+            <Icon name="chevronLeft" className="size-3.5" />
+          </button>
+          <div className="px-2 text-sm font-bold tabular-nums text-gray-900">
+            {THAI_MONTHS[view.month0]} {view.year + 543}
+          </div>
+          <button
+            type="button"
+            onClick={() => nav(1)}
+            className="flex size-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+            aria-label="เดือนถัดไป"
+          >
+            <Icon name="chevronRight" className="size-3.5" />
+          </button>
+          {/* "วันนี้" — also inside the same pill, separated by a thin vertical divider */}
+          <span aria-hidden className="mx-0.5 h-4 w-px bg-gray-200" />
+          <button
+            type="button"
+            onClick={() => setView(today)}
+            className="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+            title="กลับไปเดือนปัจจุบัน"
+          >
+            วันนี้
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => nav(1)}
-          className="flex size-8 items-center justify-center rounded-full bg-white text-gray-500 ring-1 ring-gray-200 transition-colors hover:bg-gray-50 hover:text-gray-700"
-          aria-label="เดือนถัดไป"
-        >
-          <Icon name="chevronRight" className="size-3.5" />
-        </button>
       </div>
 
       {/* Calendar table — table-like layout with bordered cells */}
@@ -356,7 +409,7 @@ export function MiniCalendar({
             const wrapStatus = wrapCheckoutMap.get(i)
 
             const cellInner = (
-              <div className="flex h-full flex-col items-start justify-between px-2 pb-2 pt-2.5">
+              <div className="flex h-full flex-col items-start justify-between px-2 pb-2 pt-1">
                 <div
                   className={cn(
                     'flex size-7 shrink-0 items-center justify-center self-center rounded-full text-[13px] font-semibold leading-none',
@@ -369,13 +422,14 @@ export function MiniCalendar({
                   {cell.dayNum}
                 </div>
 
-                <div className="w-full text-left">
+                <div className="w-full text-center">
                   {isContinuation || isStripFirst ? null /* strip overlay drawn separately */
                     : beyondWindow ? (
                       <div className="text-center text-[9px] font-medium text-gray-300">
                         ยังไม่เปิดจอง
                       </div>
                     )
+                    : hidePrices ? null /* /listings-calendar/hide — calendar shows no prices at all */
                     : showLockIcon && cell.inMonth ? (
                       <div className="flex w-full items-center justify-center text-gray-400" title={splitLocked ? 'ปิดการขายในวันนี้' : 'ยังไม่ได้ตั้งราคา Agent'}>
                         <Icon name="lock" className="size-3.5" />
@@ -383,18 +437,30 @@ export function MiniCalendar({
                     )
                     : cell.inMonth && price > 0 ? (
                     isDiscount ? (
-                      <div className="flex flex-col items-start leading-tight">
-                        <span className="text-[9px] text-gray-400 line-through">
-                          ฿{Math.round(price * 1.25).toLocaleString('en-US')}
-                        </span>
-                        <span className="text-[10.5px] font-semibold text-red-500">
-                          ฿{price.toLocaleString('en-US')}
-                        </span>
-                      </div>
+                      // Tight stack: strikethrough original + actual price standard, leading-none
+                      // so the 2-line price never overflows the cell's vertical bounds.
+                      // Use the real originalPrice when stored; fall back to a 25% bump for legacy
+                      // discounts that don't have one captured yet.
+                      (() => {
+                        const original =
+                          dayData?.originalPrice != null && dayData.originalPrice > price
+                            ? dayData.originalPrice
+                            : Math.round(price * 1.25)
+                        return (
+                          <div className="flex flex-col items-center gap-0 leading-none">
+                            <span className="text-[9px] text-gray-400 line-through">
+                              ฿{original.toLocaleString('en-US')}
+                            </span>
+                            <span className="mt-0.5 text-[11.5px] font-semibold text-red-500">
+                              ฿{price.toLocaleString('en-US')}
+                            </span>
+                          </div>
+                        )
+                      })()
                     ) : (
                       <div
                         className={cn(
-                          'text-[10.5px] font-medium tabular-nums',
+                          'text-[13px] font-medium tabular-nums',
                           isSpecial ? 'font-semibold text-blue-600' : 'text-gray-700',
                         )}
                       >
@@ -414,7 +480,7 @@ export function MiniCalendar({
                   <div
                     aria-hidden
                     className={cn(
-                      'pointer-events-none absolute bottom-2 left-0 z-10 h-[18px] w-2.5 rounded-r-full',
+                      'pointer-events-none absolute bottom-2 left-0 z-10 h-[22px] w-2.5 rounded-r-full',
                       wrapStatus === 'BOOKED'
                         ? 'bg-red-500'
                         : wrapStatus === 'PENDING_PAYMENT'
@@ -443,9 +509,15 @@ export function MiniCalendar({
                       : stripStatus === 'PENDING_PAYMENT'
                         ? 'bg-amber-400'
                         : 'bg-gray-500'
-                  // Use effective fields so sibling-locked cells display the sibling customer name
-                  const stripLabel =
-                    stripStatus === 'UNDER_MAINTENANCE'
+                  // Use effective fields so sibling-locked cells display the sibling customer name.
+                  // hideCustomerName → generic labels only (no PII in share-friendly views).
+                  const stripLabel = hideCustomerName
+                    ? stripStatus === 'BOOKED'
+                      ? 'จอง'
+                      : stripStatus === 'PENDING_PAYMENT'
+                        ? 'รอชำระ'
+                        : 'ปิดซ่อม'
+                    : stripStatus === 'UNDER_MAINTENANCE'
                       ? (dayData?.effectiveNote ?? 'ปิดซ่อม')
                       : (dayData?.effectiveCustomerName ?? dayData?.effectiveNote ?? '—')
                   const stripFromSibling = !!dayData?.fromSibling
@@ -465,7 +537,7 @@ export function MiniCalendar({
                           (planEntry.stripLen > 1 ? ` (${planEntry.stripLen} คืน)` : '')
                         }
                         className={cn(
-                          'flex w-full items-center gap-1 px-2 py-0.5 text-[10px] font-semibold text-white',
+                          'flex w-full items-center gap-1.5 px-2.5 py-1 text-[12px] font-semibold leading-tight text-white',
                           stripBg,
                           // Sibling-locked strips render slightly lighter so the user can tell at a glance
                           // that this hold comes from another variant.
@@ -475,7 +547,7 @@ export function MiniCalendar({
                         )}
                       >
                         {stripFromSibling && !planEntry.continuesFromPrevRow && (
-                          <Icon name="lock" className="size-2.5 shrink-0" />
+                          <Icon name="lock" className="size-3 shrink-0" />
                         )}
                         <span className="min-w-0 truncate">{stripLabel}</span>
                       </div>
@@ -486,7 +558,8 @@ export function MiniCalendar({
             )
 
             const cellClass = cn(
-              'relative h-[78px] border-gray-100 transition-colors',
+              'relative border-gray-100 transition-colors',
+              dense ? 'h-[62px]' : 'h-[78px]',
               !isLastCol && 'border-r',
               !isLastRow && 'border-b',
               cellBg,
@@ -509,13 +582,19 @@ export function MiniCalendar({
                 title={(() => {
                   const prefix = fromSibling ? '🔒 (รูปแบบห้องอื่น) ' : ''
                   if (effectiveStatus === 'BOOKED') {
-                    return `${prefix}จองโดย ${dayData?.effectiveCustomerName ?? '—'}`
+                    return hideCustomerName
+                      ? `${prefix}จอง`
+                      : `${prefix}จองโดย ${dayData?.effectiveCustomerName ?? '—'}`
                   }
                   if (effectiveStatus === 'PENDING_PAYMENT') {
-                    return `${prefix}รอชำระ — ${dayData?.effectiveCustomerName ?? '—'}`
+                    return hideCustomerName
+                      ? `${prefix}รอชำระ`
+                      : `${prefix}รอชำระ — ${dayData?.effectiveCustomerName ?? '—'}`
                   }
                   if (effectiveStatus === 'UNDER_MAINTENANCE') {
-                    return `${prefix}ปิดซ่อม${dayData?.effectiveNote ? ` — ${dayData.effectiveNote}` : ''}`
+                    return hideCustomerName
+                      ? `${prefix}ปิดซ่อม`
+                      : `${prefix}ปิดซ่อม${dayData?.effectiveNote ? ` — ${dayData.effectiveNote}` : ''}`
                   }
                   return undefined
                 })()}

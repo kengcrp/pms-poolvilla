@@ -339,6 +339,7 @@ export const BookingService = {
   async postpone(input: {
     bookingId: string
     ownerId: string
+    /** Empty string = "ยังไม่ระบุวัน" (postpone without committing new dates yet) */
     newCheckin: Date | string
     newCheckout: Date | string
     reason?: string
@@ -354,6 +355,41 @@ export const BookingService = {
           code: 'BAD_REQUEST',
           message: 'เลื่อนได้เฉพาะ booking ที่ยืนยันแล้วหรือรอชำระ',
         })
+      }
+
+      const datesUnspecified =
+        (typeof input.newCheckin === 'string' && input.newCheckin === '') ||
+        (typeof input.newCheckout === 'string' && input.newCheckout === '')
+
+      // Common: release the old calendar cells in both paths so the original
+      // dates become available regardless of whether we re-allocate new ones.
+      const releaseOldCells = () =>
+        tx.variantCalendar.updateMany({
+          where: { bookingId: input.bookingId },
+          data: { status: 'OPEN', bookingId: null, note: null },
+        })
+
+      const expires = input.expiresAt
+        ? new Date(input.expiresAt)
+        : new Date(Date.now() + 30 * 86400000) // default 30 days from now
+
+      if (datesUnspecified) {
+        // "ยังไม่ระบุวัน" path — free old cells, log history with null new dates,
+        // but DON'T reserve any new cells and DON'T touch the booking's checkin/out
+        // (those keep the original dates as a hint for what was scheduled).
+        await releaseOldCells()
+        await tx.bookingPostpone.create({
+          data: {
+            bookingId: input.bookingId,
+            oldCheckin: booking.checkin,
+            oldCheckout: booking.checkout,
+            newCheckin: null,
+            newCheckout: null,
+            reason: input.reason,
+            expiresAt: expires,
+          },
+        })
+        return booking
       }
 
       const newNights = nightDays(input.newCheckin, input.newCheckout)
@@ -377,10 +413,7 @@ export const BookingService = {
       }
 
       // Release old calendar cells (set OPEN + clear bookingId)
-      await tx.variantCalendar.updateMany({
-        where: { bookingId: input.bookingId },
-        data: { status: 'OPEN', bookingId: null, note: null },
-      })
+      await releaseOldCells()
 
       // Reserve new calendar cells
       const targetStatus = booking.status === 'CONFIRMED' ? 'BOOKED' : 'PENDING_PAYMENT'
@@ -411,9 +444,7 @@ export const BookingService = {
           newCheckin: toDateOnly(new Date(input.newCheckin)),
           newCheckout: toDateOnly(new Date(input.newCheckout)),
           reason: input.reason,
-          expiresAt: input.expiresAt
-            ? new Date(input.expiresAt)
-            : new Date(Date.now() + 30 * 86400000), // default 30 days from now
+          expiresAt: expires,
         },
       })
 

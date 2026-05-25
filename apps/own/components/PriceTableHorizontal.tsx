@@ -93,43 +93,10 @@ export function PriceTableHorizontal({ propertyId, onCellClick, priceMode: contr
 
   return (
     <div>
-      {/* Top bar — single grouped month nav (left) + jump-to-today + price-mode toggle (right) */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        {/* Month navigator: [<] พฤษภาคม 2569 [>] grouped together */}
-        <div className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-1.5 py-1 shadow-inner">
-          <button
-            type="button"
-            onClick={() => nav(-1)}
-            className="flex size-8 items-center justify-center rounded-full bg-white text-gray-600 shadow-sm transition-colors hover:bg-brand-50 hover:text-brand-700"
-            aria-label="เดือนก่อน"
-            title="เดือนก่อนหน้า"
-          >
-            <Icon name="chevronLeft" className="size-3.5" />
-          </button>
-          <div className="min-w-[140px] text-center text-sm font-semibold text-gray-800 tabular-nums">
-            {THAI_MONTHS[view.month0]} {view.year + 543}
-          </div>
-          <button
-            type="button"
-            onClick={() => nav(1)}
-            className="flex size-8 items-center justify-center rounded-full bg-white text-gray-600 shadow-sm transition-colors hover:bg-brand-50 hover:text-brand-700"
-            aria-label="เดือนถัดไป"
-            title="เดือนถัดไป"
-          >
-            <Icon name="chevronRight" className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setView(today)}
-            className="ml-0.5 rounded-full px-3 py-1.5 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50"
-            title="กลับไปเดือนปัจจุบัน"
-          >
-            วันนี้
-          </button>
-        </div>
-
-        {/* ราคาขาย / ราคาส่ง toggle — hidden when caller owns the price-mode state */}
-        {!isControlled && (
+      {/* Top bar — price-mode toggle only, right-aligned. Month nav has been moved INTO
+          the table's top-left corner cell so the calendar controls all live together. */}
+      {!isControlled && data.property.partnerListing && (
+        <div className="mb-3 flex justify-end">
           <div className="inline-flex rounded-full bg-gray-100 p-1 shadow-inner">
             <button
               type="button"
@@ -157,20 +124,51 @@ export function PriceTableHorizontal({ propertyId, onCellClick, priceMode: contr
               ราคาส่ง
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-xs">
             <thead>
               <tr>
-                {/* Top-left: empty corner (month nav lives above the table now) */}
+                {/* Top-left corner: month navigator + jump-to-today (replaces ห้อง/ขนาด label) */}
                 <th
                   colSpan={2}
-                  className="sticky left-0 z-20 border-b border-r border-gray-200 bg-gray-50 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                  className="sticky left-0 z-20 border-b border-r border-gray-200 bg-gray-50 px-3 py-2"
                 >
-                  ห้อง / ขนาด
+                  <div className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-white p-1 shadow-inner ring-1 ring-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => nav(-1)}
+                      className="flex size-7 shrink-0 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
+                      aria-label="เดือนก่อน"
+                      title="เดือนก่อนหน้า"
+                    >
+                      <Icon name="chevronLeft" className="size-3.5" />
+                    </button>
+                    <div className="px-1 text-center text-[12px] font-semibold normal-case tracking-normal text-gray-800 tabular-nums">
+                      {THAI_MONTHS[view.month0]} {view.year + 543}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => nav(1)}
+                      className="flex size-7 shrink-0 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
+                      aria-label="เดือนถัดไป"
+                      title="เดือนถัดไป"
+                    >
+                      <Icon name="chevronRight" className="size-3.5" />
+                    </button>
+                    {/* วันนี้ — proper button styling (bg + ring), nowrap, lives in the same pill */}
+                    <button
+                      type="button"
+                      onClick={() => setView(today)}
+                      className="ml-0.5 shrink-0 whitespace-nowrap rounded-full bg-brand-50 px-3 py-1 text-[11px] font-semibold normal-case tracking-normal text-brand-700 ring-1 ring-inset ring-brand-200 transition-colors hover:bg-brand-100 hover:ring-brand-300"
+                      title="กลับไปเดือนปัจจุบัน"
+                    >
+                      วันนี้
+                    </button>
+                  </div>
                 </th>
                 {days.map((d) => {
                   const key = ymd(d)
@@ -260,7 +258,9 @@ export function PriceTableHorizontal({ propertyId, onCellClick, priceMode: contr
                     </td>
                     {/* Capacity column */}
                     <td className="whitespace-nowrap border-r border-gray-200 bg-white px-3 py-3 text-center align-middle">
-                      <div className="text-xs text-gray-600">{v.variant.maxGuests} ท่าน</div>
+                      <div className="text-xs font-medium text-gray-800">
+                        <span className="font-semibold text-gray-900">{v.variant.maxGuests}</span> ท่าน
+                      </div>
                     </td>
                     {days.map((d, dayIdx) => {
                       const p = plan[dayIdx]!
@@ -406,6 +406,18 @@ export function PriceTableHorizontal({ propertyId, onCellClick, priceMode: contr
                             {displayed === null ? (
                               <span className="inline-flex items-center justify-center text-gray-400" title="ยังไม่ได้ตั้งราคา / ปิดการขาย">
                                 <Icon name="lock" className="size-3.5" />
+                              </span>
+                            ) : priceType === 'DISCOUNT' &&
+                              day.originalPrice != null &&
+                              day.originalPrice > displayed ? (
+                              // Promo: original strikethrough + new price red
+                              <span className="inline-flex items-baseline gap-1">
+                                <span className="text-[9px] text-gray-400 line-through">
+                                  ฿{day.originalPrice.toLocaleString('en-US')}
+                                </span>
+                                <span className="font-bold text-red-600">
+                                  ฿{displayed.toLocaleString('en-US')}
+                                </span>
                               </span>
                             ) : (
                               <>

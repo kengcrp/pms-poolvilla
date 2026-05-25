@@ -148,7 +148,7 @@ export function AvailabilityGrid({ hotelId }: { hotelId: string }) {
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-4 text-[10.5px] text-gray-500">
-        <span className="inline-flex items-center gap-1.5"><span className="size-3 rounded bg-emerald-100 ring-1 ring-emerald-200" /> ว่างเยอะ (≥ 30%)</span>
+        <span className="inline-flex items-center gap-1.5"><span className="size-3 rounded bg-emerald-100 ring-1 ring-emerald-200" /> ว่างเยอะ (มากกว่า 30%)</span>
         <span className="inline-flex items-center gap-1.5"><span className="size-3 rounded bg-amber-50 ring-1 ring-amber-200" /> ใกล้เต็ม (&lt; 30%)</span>
         <span className="inline-flex items-center gap-1.5"><span className="size-3 rounded bg-rose-100 ring-1 ring-rose-200" /> เต็ม (0)</span>
       </div>

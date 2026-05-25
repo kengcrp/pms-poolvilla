@@ -17,6 +17,10 @@ const weeklyRowSchema = z.object({
   agentPrice: z.number().nonnegative().nullable().optional(),
   minStay: z.number().int().min(1).max(60).default(1),
   splitOpen: z.boolean().default(true),
+  /** Guests included in `price`. null = ใช้ค่า PropertyVariant.maxGuests. */
+  includedGuests: z.number().int().min(1).max(100).nullable().optional(),
+  /** Fee per guest above `includedGuests`. null/0 = ไม่คิดค่าท่านเพิ่ม. */
+  extraGuestFee: z.number().nonnegative().nullable().optional(),
 })
 
 /** Iterate nights [checkin, checkout) inclusive of checkin, exclusive of checkout. */
@@ -52,6 +56,8 @@ export const pricingRouter = router({
               agentPrice: row.agentPrice !== null ? Number(row.agentPrice) : null,
               minStay: row.minStay,
               splitOpen: row.splitOpen,
+              includedGuests: row.includedGuests,
+              extraGuestFee: row.extraGuestFee !== null ? Number(row.extraGuestFee) : null,
             }
           : {
               dayOfWeek: dow,
@@ -59,6 +65,8 @@ export const pricingRouter = router({
               agentPrice: null as number | null,
               minStay: 1,
               splitOpen: true,
+              includedGuests: null as number | null,
+              extraGuestFee: null as number | null,
             }
       })
     }),
@@ -82,6 +90,8 @@ export const pricingRouter = router({
               agentPrice: r.agentPrice ?? null,
               minStay: r.minStay,
               splitOpen: r.splitOpen,
+              includedGuests: r.includedGuests ?? null,
+              extraGuestFee: r.extraGuestFee ?? null,
             },
             create: {
               variantId: input.variantId,
@@ -90,6 +100,8 @@ export const pricingRouter = router({
               agentPrice: r.agentPrice ?? null,
               minStay: r.minStay,
               splitOpen: r.splitOpen,
+              includedGuests: r.includedGuests ?? null,
+              extraGuestFee: r.extraGuestFee ?? null,
             },
           }),
         ),
@@ -113,6 +125,9 @@ export const pricingRouter = router({
         agentPrice: z.number().nonnegative().nullable().optional(),
         priceType: z.enum(['SPECIAL', 'DISCOUNT']).nullable().optional(),
         note: z.string().nullable().optional(),
+        /** Original (pre-discount) price — only meaningful when priceType=DISCOUNT.
+         *  Used by the UI to render strikethrough original alongside the promo price. */
+        originalPrice: z.number().nonnegative().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -121,6 +136,14 @@ export const pricingRouter = router({
       if (nights.length === 0) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'ต้องมีอย่างน้อย 1 คืน' })
       }
+      // For DISCOUNT type — only store originalPrice when it's strictly higher
+      // than the new price (otherwise it's not a "discount" comparison).
+      const originalPriceForSave =
+        input.priceType === 'DISCOUNT' &&
+        input.originalPrice != null &&
+        input.originalPrice > input.price
+          ? input.originalPrice
+          : null
       return prisma.$transaction(async (tx) => {
         const existing = await tx.variantCalendar.findMany({
           where: { variantId: input.variantId, date: { in: nights } },
@@ -139,6 +162,7 @@ export const pricingRouter = router({
               priceOverride: input.price,
               agentPriceOverride: input.agentPrice ?? null,
               priceType: input.priceType ?? null,
+              originalPrice: originalPriceForSave,
               note: input.note ?? undefined,
             },
             create: {
@@ -148,6 +172,7 @@ export const pricingRouter = router({
               priceOverride: input.price,
               agentPriceOverride: input.agentPrice ?? null,
               priceType: input.priceType ?? null,
+              originalPrice: originalPriceForSave,
               note: input.note ?? null,
             },
           })

@@ -333,6 +333,12 @@ model VariantWeeklyPricing {
   minStay   Int      @default(1)
   /// Per-day toggle: when false, this variant is locked for split-room sale on this DOW
   splitOpen Boolean  @default(true)
+  /// Guests included in `price` (e.g. 12 = ราคา 9,900 รวม 12 ท่าน).
+  /// Defaults to PropertyVariant.maxGuests on the server when null.
+  includedGuests Int?
+  /// Fee per additional guest above `includedGuests` (e.g. 500 = ท่านที่ 13+ คิดเพิ่ม 500/ท่าน).
+  /// null/0 = ไม่คิดค่าท่านเพิ่ม (booker can never exceed PropertyVariant.maxGuests).
+  extraGuestFee  Decimal? @db.Decimal(10, 2)
 
   variant PropertyVariant @relation(fields: [variantId], references: [id])
 
@@ -350,6 +356,10 @@ model VariantCalendar {
   priceOverride      Decimal?           @db.Decimal(10, 2)
   /// Per-day agent / OTA price override — trumps the weekly default agentPrice when set.
   agentPriceOverride Decimal?           @db.Decimal(10, 2)
+  /// Snapshot of the regular price BEFORE this override — used to render the
+  /// strikethrough original alongside a DISCOUNT promo price. Null for normal
+  /// overrides where no comparison is needed.
+  originalPrice      Decimal?           @db.Decimal(10, 2)
   priceType          PriceOverrideType?
   note               String?            @db.Text
   bookingId          String?
@@ -370,7 +380,9 @@ model VariantCalendar {
 model PropertyImage {
   id         String  @id @default(cuid())
   propertyId String
-  url        String  @db.Text
+  // MediumText (16MB) — owners often paste data: URLs for high-res photos before any CDN
+  // upload pipeline exists. MySQL TEXT (64KB) overflows for ~3MB+ images.
+  url        String  @db.MediumText
   type       String // cover | gallery | tour_360
   category   String? // pool | bedroom | bathroom | living | kitchen | rooftop | outdoor
   sortOrder  Int     @default(0)
@@ -548,8 +560,11 @@ model BookingPostpone {
   bookingId     String
   oldCheckin    DateTime @db.Date
   oldCheckout   DateTime @db.Date
-  newCheckin    DateTime @db.Date
-  newCheckout   DateTime @db.Date
+  // Nullable to support "ยังไม่ระบุวัน" — owner postpones without committing new
+  // dates yet. The booking's original cells are released, but the booking sits in
+  // history (ประวัติเลื่อนเข้าพัก) until new dates are chosen.
+  newCheckin    DateTime? @db.Date
+  newCheckout   DateTime? @db.Date
   postponedAt   DateTime @default(now())
   expiresAt     DateTime // หมดเขตเลื่อนวัน
   reason        String?  @db.Text
