@@ -39,6 +39,9 @@ export type CalendarDay = {
   /** Pre-discount original price — only present when priceType=DISCOUNT and the
    *  owner has captured an "original" reference (e.g. 20,000 → 15,000 promo). */
   originalPrice: number | null
+  /** Pre-discount original AGENT price — same role as `originalPrice` but for the
+   *  agent / OTA price column. Powers strikethrough on the agent-mode calendar. */
+  originalAgentPrice: number | null
   note: string | null
   bookingId: string | null
   /** Customer name if this day is linked to a booking. Useful for UI labels. */
@@ -185,6 +188,7 @@ export async function getCalendarRange(
         status: ov.status,
         priceType: ov.priceType,
         originalPrice: ov.originalPrice != null ? Number(ov.originalPrice) : null,
+        originalAgentPrice: ov.originalAgentPrice != null ? Number(ov.originalAgentPrice) : null,
         note: ov.note,
         bookingId: ov.bookingId,
         customerName: ov.bookingId ? (customerByBookingId.get(ov.bookingId) ?? null) : null,
@@ -204,6 +208,7 @@ export async function getCalendarRange(
       status: 'OPEN' as CalendarStatus,
       priceType: null,
       originalPrice: null,
+      originalAgentPrice: null,
       note: null,
       bookingId: null,
       customerName: null,

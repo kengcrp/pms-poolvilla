@@ -223,9 +223,6 @@ export default function PricingPage() {
                   {/* Meta row + ตั้งค่าราคา on the right */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
-                      {/* Show only the trailing number (strip the "CITY-" prefix) */}
-                      <code className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-700">{p.code.replace(/^[^-]+-/, '')}</code>
-                      <span className="text-gray-300">·</span>
                       <span className="inline-flex items-center gap-1 text-gray-900">
                         <Icon name="bed" className="size-3.5 text-gray-600" />
                         <span className="font-semibold">{defaultVariant.bedrooms}</span>
@@ -341,9 +338,6 @@ export default function PricingPage() {
                       <h2 className="truncate text-lg font-bold leading-tight tracking-tight text-gray-900">
                         {name}
                       </h2>
-                      <code className="mt-1 inline-block rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10.5px] text-gray-600">
-                        {p.code}
-                      </code>
                     </div>
                     <Button
                       variant="secondary"

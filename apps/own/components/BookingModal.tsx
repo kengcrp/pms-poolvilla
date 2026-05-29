@@ -99,6 +99,9 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
     // Pending tab keeps date + time separately (joined to ISO on submit)
     paymentDueDate: '',
     paymentDueTime: '',
+    // Opt-in toggle — when false, no auto-cancel deadline is sent and the date/time
+    // fields stay hidden. Owner must tick to enable a temporary hold.
+    useTempLock: false,
     vat: false,
     showLogo: false,
     blockNote: '',
@@ -136,6 +139,7 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
       paymentDueAt: '',
       paymentDueDate: '',
       paymentDueTime: '',
+      useTempLock: false,
       vat: false,
       showLogo: false,
       blockNote: '',
@@ -264,11 +268,16 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
       return createConfirmed.mutate({ ...base, customerName, paymentMethod: form.paymentMethod })
     }
     if (tab === 'pending') {
-      // Combine the split date + time pickers into a single ISO datetime.
-      const dueDate = form.paymentDueDate
-      const dueTime = form.paymentDueTime || '23:59'
-      if (!dueDate) return setError('กรุณาระบุวันนัดชำระ')
-      const paymentDueAt = new Date(`${dueDate}T${dueTime}:00`).toISOString()
+      // Temporary-lock deadline is opt-in. When the owner ticks the checkbox they
+      // must supply a date; without the tick we omit paymentDueAt entirely so no
+      // auto-cancel fires.
+      let paymentDueAt: string | undefined
+      if (form.useTempLock) {
+        const dueDate = form.paymentDueDate
+        const dueTime = form.paymentDueTime || '23:59'
+        if (!dueDate) return setError('กรุณาระบุวันนัดชำระ')
+        paymentDueAt = new Date(`${dueDate}T${dueTime}:00`).toISOString()
+      }
       return createPending.mutate({
         ...base,
         customerName,
@@ -651,7 +660,8 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
               </div>
             </div>
 
-            {/* Booker name row — paired with guest-count on invoice, full-width on quick/pending */}
+            {/* Booker name row — invoice pairs with guest-count, pending pairs with
+                ชำระมัดจำ, quick stays full-width. */}
             {tab === 'invoice' ? (
               <div className="mt-4 grid grid-cols-2 gap-4">
                 <div>
@@ -659,7 +669,7 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
                   <Input
                     value={form.bookerName}
                     onChange={(e) => setForm({ ...form, bookerName: e.target.value })}
-                    placeholder={form.customerName || ''}
+                    placeholder=""
                   />
                 </div>
                 <div>
@@ -673,49 +683,18 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
                   />
                 </div>
               </div>
-            ) : (
-              <div className="mt-4">
-                <Label>ผู้ทำรายการ</Label>
-                <Input
-                  value={form.bookerName}
-                  onChange={(e) => setForm({ ...form, bookerName: e.target.value })}
-                  placeholder={form.customerName || ''}
-                />
-              </div>
-            )}
-
-            {/* Pending tab — slim form: temporary-lock note + due date/time + amount only */}
-            {tab === 'pending' && (
-              <>
-                <div className="mt-8">
-                  <div className="text-sm font-medium text-gray-700">ล็อกชั่วคราว (ไม่บังคับ)</div>
-                  <p className="mt-1 text-xs leading-relaxed text-red-500">
-                    ระบบจะล็อกห้องชั่วคราวจนถึงวันนัดชำระ หากไม่ชำระตามกำหนด การจองจะถูกยกเลิกอัตโนมัติ
-                  </p>
+            ) : tab === 'pending' ? (
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <div>
+                  <Label>ผู้ทำรายการ</Label>
+                  <Input
+                    value={form.bookerName}
+                    onChange={(e) => setForm({ ...form, bookerName: e.target.value })}
+                    placeholder=""
+                  />
                 </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-4">
-                  <div>
-                    <Label required>วันนัดชำระ</Label>
-                    <Input
-                      type="date"
-                      value={form.paymentDueDate}
-                      onChange={(e) => setForm({ ...form, paymentDueDate: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>เวลา</Label>
-                    <Input
-                      type="time"
-                      value={form.paymentDueTime}
-                      onChange={(e) => setForm({ ...form, paymentDueTime: e.target.value })}
-                      placeholder="23:59"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <Label>จำนวนเงิน (฿)</Label>
+                <div>
+                  <Label>ชำระมัดจำ (฿)</Label>
                   <Input
                     type="number"
                     min={0}
@@ -724,6 +703,71 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
                     placeholder="0"
                   />
                 </div>
+              </div>
+            ) : (
+              <div className="mt-4">
+                <Label>ผู้ทำรายการ</Label>
+                <Input
+                  value={form.bookerName}
+                  onChange={(e) => setForm({ ...form, bookerName: e.target.value })}
+                  placeholder=""
+                />
+              </div>
+            )}
+
+            {/* Pending tab — temporary-lock section (ชำระมัดจำ moved into the booker row above) */}
+            {tab === 'pending' && (
+              <>
+                <div className="mt-6">
+                  <label className="flex cursor-pointer items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.useTempLock}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          useTempLock: e.target.checked,
+                          // Clear due date/time when unchecking so submit logic stays clean
+                          ...(e.target.checked
+                            ? {}
+                            : { paymentDueDate: '', paymentDueTime: '' }),
+                        })
+                      }
+                      className="mt-0.5 size-4 shrink-0 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                    />
+                    <div>
+                      <div className="text-sm font-medium text-gray-700">
+                        ล็อกชั่วคราว (ไม่บังคับ)
+                      </div>
+                      <p className="mt-1 text-xs leading-relaxed text-red-500">
+                        ระบบจะล็อกห้องชั่วคราวจนถึงวันนัดชำระ หากไม่ชำระตามกำหนด
+                        การจองจะถูกยกเลิกอัตโนมัติ
+                      </p>
+                    </div>
+                  </label>
+                </div>
+
+                {form.useTempLock && (
+                  <div className="mt-4 grid grid-cols-2 gap-4">
+                    <div>
+                      <Label required>วันนัดชำระ</Label>
+                      <Input
+                        type="date"
+                        value={form.paymentDueDate}
+                        onChange={(e) => setForm({ ...form, paymentDueDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label>เวลา</Label>
+                      <Input
+                        type="time"
+                        value={form.paymentDueTime}
+                        onChange={(e) => setForm({ ...form, paymentDueTime: e.target.value })}
+                        placeholder="23:59"
+                      />
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -787,22 +831,6 @@ export function BookingModal({ open, onClose, variantId, variantLabel, initialDa
               </div>
             )}
 
-            {/* Status indicator — clarifies what status the booking will get on submit */}
-            {tab === 'quick' && (
-              <div className="mt-4">
-                <Badge variant="danger" dot>จองแล้ว</Badge>
-              </div>
-            )}
-            {tab === 'pending' && (
-              <div className="mt-4">
-                <Badge variant="warning" dot>รอชำระ</Badge>
-              </div>
-            )}
-            {tab === 'invoice' && (
-              <div className="mt-4">
-                <Badge variant="danger" dot>จองแล้ว</Badge>
-              </div>
-            )}
           </>
         )}
 

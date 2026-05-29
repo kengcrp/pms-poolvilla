@@ -155,8 +155,7 @@ export default function CalendarPage() {
                         <Icon name="home" className="size-9" />
                       </div>
                     )}
-                    {/* Name overlay — frosted dark chip anchored to bottom-left of the
-                        image for high-contrast readability against any cover photo. */}
+                    {/* Name overlay only — code chip removed per design preference. */}
                     <div className="pointer-events-none absolute bottom-2 left-2 right-2">
                       <h3 className="inline-block max-w-full truncate rounded-md bg-black/65 px-2.5 py-1 text-sm font-semibold leading-tight text-white shadow-md ring-1 ring-inset ring-white/10 backdrop-blur-md">
                         {name}
@@ -166,39 +165,40 @@ export default function CalendarPage() {
                 </div>
 
                 <div className="px-3 pb-3 pt-1">
-                  <div className="mb-3 flex items-center gap-2 text-sm">
-                    {/* Show only the trailing number (strip the "CITY-" prefix) */}
-                    <code className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-700">{p.code.replace(/^[^-]+-/, '')}</code>
-                    <span className="text-gray-300">·</span>
-                    <span className="inline-flex items-center gap-1 text-gray-900">
-                      <Icon name="bed" className="size-3.5 text-gray-600" />
-                      <span className="font-semibold">{defaultVariant.bedrooms}</span>
-                      <span className="font-medium text-gray-700">นอน</span>
-                    </span>
-                    <span className="text-gray-300">·</span>
-                    <span className="inline-flex items-center gap-1 text-gray-900">
-                      <Icon name="users" className="size-3.5 text-gray-600" />
-                      <span className="font-semibold">{defaultVariant.maxGuests}</span>
-                      <span className="font-medium text-gray-700">ท่าน</span>
-                    </span>
-                  </div>
-                  {/* ราคาขาย / ราคาส่ง toggle — centered row.
-                      Sized to roughly match the month-nav pill width below so they line up
-                      visually. Always rendered (invisible placeholder when no partnerListing)
-                      so card heights match across the grid. */}
-                  <div className="mb-3 flex justify-center" aria-hidden={!p.partnerListing}>
+                  {/* Bed/guest stats + price toggle on the SAME row.
+                      Stats sit left, toggle pinned right (justify-between).
+                      Toggle is compact (auto width, smaller text) so it fits
+                      alongside the stats without wrapping on narrow cards. */}
+                  <div className="mb-3 flex items-center justify-between gap-2 text-sm">
+                    <div className="flex items-center gap-2 text-gray-900">
+                      <span className="inline-flex items-center gap-1">
+                        <Icon name="bed" className="size-3.5 text-gray-600" />
+                        <span className="font-semibold">{defaultVariant.bedrooms}</span>
+                        <span className="font-medium text-gray-700">นอน</span>
+                      </span>
+                      <span className="text-gray-300">·</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Icon name="users" className="size-3.5 text-gray-600" />
+                        <span className="font-semibold">{defaultVariant.maxGuests}</span>
+                        <span className="font-medium text-gray-700">ท่าน</span>
+                      </span>
+                    </div>
+
+                    {/* Compact toggle — pinned right. Invisible placeholder
+                        when no partnerListing so row heights match. */}
                     <div
                       className={cn(
-                        'inline-flex w-[220px] rounded-full bg-gray-100 p-1 shadow-inner',
+                        'inline-flex shrink-0 rounded-full bg-gray-100 p-0.5 shadow-inner',
                         !p.partnerListing && 'invisible',
                       )}
+                      aria-hidden={!p.partnerListing}
                     >
                       <button
                         type="button"
                         onClick={() => p.partnerListing && setPriceMode(p.id, 'sell')}
                         tabIndex={p.partnerListing ? 0 : -1}
                         className={cn(
-                          'flex-1 rounded-full py-1 text-xs font-semibold transition-all',
+                          'rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-all',
                           getPriceMode(p.id) === 'sell'
                             ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/30'
                             : 'text-gray-500 hover:text-gray-700',
@@ -211,7 +211,7 @@ export default function CalendarPage() {
                         onClick={() => p.partnerListing && setPriceMode(p.id, 'agent')}
                         tabIndex={p.partnerListing ? 0 : -1}
                         className={cn(
-                          'flex-1 rounded-full py-1 text-xs font-semibold transition-all',
+                          'rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-all',
                           getPriceMode(p.id) === 'agent'
                             ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/30'
                             : 'text-gray-500 hover:text-gray-700',
@@ -272,9 +272,7 @@ export default function CalendarPage() {
                     <h2 className="truncate text-lg font-bold leading-tight tracking-tight text-gray-900">
                       {name}
                     </h2>
-                    <code className="mt-1 inline-block rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10.5px] text-gray-600">
-                      {p.code}
-                    </code>
+                    {/* Code chip removed per design preference. */}
                   </div>
 
                   <div className="p-4">
@@ -331,14 +329,16 @@ export default function CalendarPage() {
                   property={p}
                   name={name}
                   cover={cover}
-                  belowImage={
+                  belowName={
                     p.partnerListing && (
-                      <div className="inline-flex rounded-full bg-gray-100 p-1 shadow-inner">
+                      // Slight negative left margin so the pill's visual left edge
+                      // (the bg padding) aligns with the property name's "H" above.
+                      <div className="-ml-2 inline-flex rounded-full bg-gray-100 p-1 shadow-inner">
                         <button
                           type="button"
                           onClick={() => setPriceMode(p.id, 'sell')}
                           className={cn(
-                            'rounded-full px-4 py-1 text-xs font-semibold transition-all',
+                            'rounded-full px-5 py-1.5 text-sm font-semibold transition-all',
                             getPriceMode(p.id) === 'sell'
                               ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/30'
                               : 'text-gray-500 hover:text-gray-700',
@@ -350,7 +350,7 @@ export default function CalendarPage() {
                           type="button"
                           onClick={() => setPriceMode(p.id, 'agent')}
                           className={cn(
-                            'rounded-full px-4 py-1 text-xs font-semibold transition-all',
+                            'rounded-full px-5 py-1.5 text-sm font-semibold transition-all',
                             getPriceMode(p.id) === 'agent'
                               ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/30'
                               : 'text-gray-500 hover:text-gray-700',

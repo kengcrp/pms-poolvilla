@@ -209,15 +209,16 @@ export default function CouponsPage() {
         size="md"
       >
         <ModalBody>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-6">
+            {/* ── Section 1: Identity ─────────────────────────── */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <Label required>รหัส</Label>
+                <Label required>รหัสคูปอง</Label>
                 <Input
                   value={form.code}
                   onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
                   placeholder="SUMMER25"
-                  className="font-mono"
+                  className="font-mono tracking-wider"
                 />
               </div>
               <div>
@@ -230,75 +231,131 @@ export default function CouponsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label>ประเภท</Label>
-                <Select
-                  value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value as 'DISCOUNT' | 'CASH' })}
-                >
-                  <option value="DISCOUNT">ส่วนลด</option>
-                  <option value="CASH">เงินสด</option>
-                </Select>
-              </div>
-              <div>
-                <Label>หน่วย</Label>
-                <Select
-                  value={form.format}
-                  onChange={(e) => setForm({ ...form, format: e.target.value as 'PERCENT' | 'BAHT' })}
-                >
-                  <option value="PERCENT">เปอร์เซ็นต์ (%)</option>
-                  <option value="BAHT">บาท (฿)</option>
-                </Select>
-              </div>
-              <div>
-                <Label required>มูลค่า</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step={form.format === 'PERCENT' ? '1' : '50'}
-                  value={form.value}
-                  onChange={(e) => setForm({ ...form, value: Number(e.target.value) })}
-                />
+            {/* ── Section 2: Discount value ────────────────────
+                Segmented control for type (ส่วนลด / เงินสด) replaces the
+                dropdown — clearer at a glance and matches modern coupon UIs. */}
+            <div>
+              <Label>ประเภทส่วนลด</Label>
+              <div className="mt-1.5 inline-flex w-full rounded-xl bg-gray-100 p-1">
+                {(
+                  [
+                    { val: 'DISCOUNT', label: 'ส่วนลด' },
+                    { val: 'CASH', label: 'เงินสด' },
+                  ] as const
+                ).map((opt) => {
+                  const active = form.type === opt.val
+                  return (
+                    <button
+                      key={opt.val}
+                      type="button"
+                      onClick={() => setForm({ ...form, type: opt.val })}
+                      className={cn(
+                        'flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-all',
+                        active
+                          ? 'bg-white text-brand-700 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700',
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <Label required>จำนวน</Label>
+                <Label required>มูลค่าส่วนลด</Label>
+                {/* Combined value + unit input — number on the left, % / ฿ toggle on the right */}
+                <div className="flex overflow-hidden rounded-lg ring-1 ring-inset ring-gray-300 focus-within:ring-2 focus-within:ring-brand-500">
+                  <input
+                    type="number"
+                    min={0}
+                    step={form.format === 'PERCENT' ? '1' : '50'}
+                    value={form.value}
+                    onChange={(e) => setForm({ ...form, value: Number(e.target.value) })}
+                    className="min-w-0 flex-1 border-0 bg-white px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-0"
+                  />
+                  <div className="flex shrink-0 border-l border-gray-200 bg-gray-50">
+                    {(
+                      [
+                        { val: 'PERCENT', label: '%' },
+                        { val: 'BAHT', label: '฿' },
+                      ] as const
+                    ).map((opt) => {
+                      const active = form.format === opt.val
+                      return (
+                        <button
+                          key={opt.val}
+                          type="button"
+                          onClick={() => setForm({ ...form, format: opt.val })}
+                          className={cn(
+                            'px-3 text-sm font-bold transition-colors',
+                            active
+                              ? 'bg-brand-600 text-white'
+                              : 'text-gray-500 hover:bg-gray-100',
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <Label required>จำนวนที่ออก</Label>
                 <Input
                   type="number"
                   min={1}
                   value={form.qty}
                   onChange={(e) => setForm({ ...form, qty: Number(e.target.value) })}
-                />
-              </div>
-              <div>
-                <Label required>เริ่มใช้</Label>
-                <Input
-                  type="date"
-                  value={form.startsAt}
-                  onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label required>หมดอายุ</Label>
-                <Input
-                  type="date"
-                  value={form.expiresAt}
-                  onChange={(e) => setForm({ ...form, expiresAt: e.target.value })}
+                  className="tabular-nums"
                 />
               </div>
             </div>
 
-            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2.5 transition-colors hover:bg-gray-50">
+            {/* ── Section 3: Validity window ───────────────── */}
+            <div>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                ระยะเวลาใช้งาน
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <Label required>เริ่มใช้</Label>
+                  <Input
+                    type="date"
+                    value={form.startsAt}
+                    onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label required>หมดอายุ</Label>
+                  <Input
+                    type="date"
+                    value={form.expiresAt}
+                    onChange={(e) => setForm({ ...form, expiresAt: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ── Section 4: Per-customer limit ────────────── */}
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 bg-gray-50/50 p-3.5 transition-colors hover:bg-gray-50">
               <input
                 type="checkbox"
                 checked={form.perUser}
                 onChange={(e) => setForm({ ...form, perUser: e.target.checked })}
-                className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                className="mt-0.5 size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
               />
-              <span className="text-sm text-gray-700">จำกัด 1 ครั้ง / ลูกค้า</span>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-gray-900">
+                  จำกัด 1 ครั้ง / ลูกค้า
+                </div>
+                <div className="mt-0.5 text-xs text-gray-500">
+                  ลูกค้าแต่ละคนใช้คูปองนี้ได้ครั้งเดียวเท่านั้น
+                </div>
+              </div>
             </label>
 
             {err && (

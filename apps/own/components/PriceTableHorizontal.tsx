@@ -137,11 +137,11 @@ export function PriceTableHorizontal({ propertyId, onCellClick, priceMode: contr
                   colSpan={2}
                   className="sticky left-0 z-20 border-b border-r border-gray-200 bg-gray-50 px-3 py-2"
                 >
-                  <div className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-white p-1 shadow-inner ring-1 ring-gray-200">
+                  <div className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-gray-200 bg-white px-1 py-0.5 shadow-sm">
                     <button
                       type="button"
                       onClick={() => nav(-1)}
-                      className="flex size-7 shrink-0 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
+                      className="flex size-7 shrink-0 items-center justify-center rounded-full text-gray-600 transition-colors hover:text-brand-700"
                       aria-label="เดือนก่อน"
                       title="เดือนก่อนหน้า"
                     >
@@ -153,17 +153,16 @@ export function PriceTableHorizontal({ propertyId, onCellClick, priceMode: contr
                     <button
                       type="button"
                       onClick={() => nav(1)}
-                      className="flex size-7 shrink-0 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
+                      className="flex size-7 shrink-0 items-center justify-center rounded-full text-gray-600 transition-colors hover:text-brand-700"
                       aria-label="เดือนถัดไป"
                       title="เดือนถัดไป"
                     >
                       <Icon name="chevronRight" className="size-3.5" />
                     </button>
-                    {/* วันนี้ — proper button styling (bg + ring), nowrap, lives in the same pill */}
                     <button
                       type="button"
                       onClick={() => setView(today)}
-                      className="ml-0.5 shrink-0 whitespace-nowrap rounded-full bg-brand-50 px-3 py-1 text-[11px] font-semibold normal-case tracking-normal text-brand-700 ring-1 ring-inset ring-brand-200 transition-colors hover:bg-brand-100 hover:ring-brand-300"
+                      className="ml-0.5 shrink-0 whitespace-nowrap px-2.5 py-1 text-[11px] font-semibold text-brand-700 transition-colors hover:text-brand-800"
                       title="กลับไปเดือนปัจจุบัน"
                     >
                       วันนี้
@@ -252,9 +251,21 @@ export function PriceTableHorizontal({ propertyId, onCellClick, priceMode: contr
 
                 return (
                   <tr key={v.variant.id} className="border-b border-gray-100 last:border-b-0">
-                    {/* Label column — plain text only (weekly-rate config is on the header button) */}
+                    {/* Label column — variant name + bedroom/bathroom counts stacked below.
+                        Bathroom is property-level so only meaningful on the default
+                        "เหมาหลัง" variant; hidden on split variants.
+                        Compact labels (นอน / น้ำ) instead of full "ห้องนอน / ห้องน้ำ". */}
                     <td className="sticky left-0 z-10 whitespace-nowrap border-r border-gray-200 bg-white px-4 py-3 align-middle">
                       <div className="text-sm font-medium text-gray-800">{label}</div>
+                      <div className="mt-0.5 text-[11px] text-gray-500">
+                        <span className="font-semibold text-gray-700">{v.variant.bedrooms}</span> นอน
+                        {v.variant.isDefault && (
+                          <>
+                            {' · '}
+                            <span className="font-semibold text-gray-700">{data.property.totalBathrooms}</span> น้ำ
+                          </>
+                        )}
+                      </div>
                     </td>
                     {/* Capacity column */}
                     <td className="whitespace-nowrap border-r border-gray-200 bg-white px-3 py-3 text-center align-middle">

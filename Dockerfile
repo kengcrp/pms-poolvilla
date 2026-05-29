@@ -1,81 +1,60 @@
 # syntax=docker/dockerfile:1.7
 
-# Multi-stage build for any Next.js app in this monorepo.
-# Pass APP_NAME=own or APP_NAME=m at build time:
-#   docker build --build-arg APP_NAME=own -t pms-own .
+# Simpler single-stage build for the monorepo. Pass APP_NAME=own or APP_NAME=m
+# at build time:
+#   docker build --build-arg APP_NAME=own --build-arg APP_PORT=3001 -t pms-own .
 #
-# Output: minimal Node image running the standalone server on the app's port.
+# Trades smaller image size for reliability with pnpm workspaces + Prisma. The
+# final image keeps the full repo + node_modules so prisma CLI and the Next.js
+# server both work without any path acrobatics.
 
-ARG NODE_VERSION=20-alpine
+ARG NODE_VERSION=22-alpine
 
-# ─── 1. base — pnpm corepack ──────────────────────────────────────────
 FROM node:${NODE_VERSION} AS base
 RUN apk add --no-cache libc6-compat openssl
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable && corepack prepare pnpm@11.0.9 --activate
 
-# ─── 2. deps — install all workspace deps (cached layer) ──────────────
-FROM base AS deps
+FROM base AS runtime
+ARG APP_NAME
+ARG APP_PORT
 WORKDIR /repo
-# Copy lockfile + workspace manifests for maximal cache hits
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+
+# Lockfile + manifests first for max cache efficiency
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
 COPY apps/own/package.json apps/own/
 COPY apps/m/package.json apps/m/
 COPY packages/api/package.json packages/api/
 COPY packages/auth/package.json packages/auth/
 COPY packages/db/package.json packages/db/
 COPY packages/ui/package.json packages/ui/
+
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
-# ─── 3. builder — full source + turbo build ───────────────────────────
-FROM base AS builder
-ARG APP_NAME
-WORKDIR /repo
-COPY --from=deps /repo/node_modules ./node_modules
-COPY --from=deps /repo/apps/own/node_modules ./apps/own/node_modules
-COPY --from=deps /repo/apps/m/node_modules ./apps/m/node_modules
-COPY --from=deps /repo/packages/api/node_modules ./packages/api/node_modules
-COPY --from=deps /repo/packages/auth/node_modules ./packages/auth/node_modules
-COPY --from=deps /repo/packages/db/node_modules ./packages/db/node_modules
-COPY --from=deps /repo/packages/ui/node_modules ./packages/ui/node_modules
+# Full source
 COPY . .
 
-# Prisma client must be generated before Next.js build (server bundles use it)
-RUN pnpm --filter @pms/db prisma generate
+# Prisma client → packages/db/node_modules/.prisma/client
+# Dummy DATABASE_URL just to satisfy prisma's env validation at generate time
+# (no actual connection is made — real URL is injected at runtime via .env).
+RUN DATABASE_URL='mysql://build:build@localhost:3306/build' \
+    pnpm --filter @pms/db exec prisma generate
 
-# Build the target app (and its workspace deps via turbo's ^build pipeline)
-RUN pnpm --filter @pms/${APP_NAME} build
-
-# ─── 4. runner — minimal standalone image ─────────────────────────────
-FROM node:${NODE_VERSION} AS runner
-ARG APP_NAME
-ARG APP_PORT
-RUN apk add --no-cache openssl
-WORKDIR /app
+# Build target app + its workspace deps (turbo's ^build pipeline)
+# Next.js may also read env vars during build — keep the dummy here for safety.
+RUN DATABASE_URL='mysql://build:build@localhost:3306/build' \
+    AUTH_SECRET='dummy-build-time-secret-not-used-at-runtime-32c' \
+    pnpm --filter @pms/${APP_NAME} run build
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=${APP_PORT}
 ENV HOSTNAME=0.0.0.0
-# Persist APP_NAME so the CMD can resolve it at runtime (build args are not
-# available after the build completes).
 ENV APP_NAME=${APP_NAME}
 
-# Non-root user for security
-RUN addgroup -g 1001 -S nodejs && adduser -S -u 1001 -G nodejs nextjs
-
-# Standalone output — Next.js packages everything needed into a single tree
-COPY --from=builder --chown=nextjs:nodejs /repo/apps/${APP_NAME}/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /repo/apps/${APP_NAME}/.next/static ./apps/${APP_NAME}/.next/static
-COPY --from=builder --chown=nextjs:nodejs /repo/apps/${APP_NAME}/public ./apps/${APP_NAME}/public
-
-# Prisma engines + schema needed at runtime
-COPY --from=builder --chown=nextjs:nodejs /repo/packages/db/prisma ./packages/db/prisma
-COPY --from=builder --chown=nextjs:nodejs /repo/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder --chown=nextjs:nodejs /repo/node_modules/@prisma ./node_modules/@prisma
-
-USER nextjs
 EXPOSE ${APP_PORT}
-CMD ["sh", "-c", "node apps/${APP_NAME}/server.js"]
+
+# pnpm filter resolves at runtime so the CMD can use ENV vars
+CMD ["sh", "-c", "pnpm --filter @pms/${APP_NAME} start"]

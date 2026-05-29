@@ -43,7 +43,9 @@ export const bookingRouter = router({
     .input(
       z.object({
         ...baseInput,
-        paymentDueAt: isoDateTime,
+        // Optional — when omitted the PENDING_PAYMENT booking has no auto-cancel
+        // deadline (owner confirms/cancels manually).
+        paymentDueAt: isoDateTime.optional(),
         deposit: z.number().nonnegative(),
         paymentMethod: z.enum(['TRANSFER', 'CARD', 'MOBILE_BANKING']).optional(),
       }),
@@ -266,6 +268,11 @@ export const bookingRouter = router({
         include: {
           property: { select: { id: true, code: true, name: true } },
           variant: { select: { id: true, name: true, bedrooms: true } },
+          postpones: {
+            where: { expiresAt: { gte: new Date() } },
+            select: { id: true },
+            take: 1,
+          },
         },
       })
     }),

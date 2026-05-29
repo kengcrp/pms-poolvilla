@@ -159,6 +159,18 @@ export const propertyRouter = router({
     })
   }),
 
+  /** Toggle Sale Page visibility — when off, the property is filtered out
+   *  of the public ownerBySlug response even if isActive + reviewStatus=ACTIVE. */
+  toggleSalePage: ownerProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const property = await assertOwn(input.id, ctx.ownerId)
+      return prisma.property.update({
+        where: { id: property.id },
+        data: { showOnSalePage: !property.showOnSalePage },
+      })
+    }),
+
   delete: ownerProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
     await assertOwn(input.id, ctx.ownerId)
     return prisma.property.update({

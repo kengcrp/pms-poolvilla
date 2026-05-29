@@ -46,6 +46,7 @@ export const publicRouter = router({
         deletedAt: null,
         isActive: true,
         reviewStatus: 'ACTIVE',
+        showOnSalePage: true, // respect owner toggle
         owner: { saleSlug: { not: null } },
         ...(f.locationId && { location: { locationId: f.locationId } }),
         ...(f.zoneId && { location: { zoneId: f.zoneId } }),
@@ -111,6 +112,7 @@ export const publicRouter = router({
             deletedAt: null,
             isActive: true,
             reviewStatus: 'ACTIVE',
+            showOnSalePage: true, // owner-toggleable visibility on /s/[slug]
           },
           orderBy: { createdAt: 'desc' },
           include: {
@@ -157,12 +159,18 @@ export const publicRouter = router({
         },
         include: {
           owner: { select: { id: true, name: true, phone: true } },
-          variants: { orderBy: { sortOrder: 'asc' } },
+          variants: {
+            orderBy: { sortOrder: 'asc' },
+            include: { weeklyPricing: true },
+          },
           location: { include: { location: true, zone: true } },
           pools: true,
           amenities: { include: { amenity: true } },
           policy: true,
           images: { orderBy: { sortOrder: 'asc' } },
+          landmarks: { orderBy: { sortOrder: 'asc' } },
+          shops: { orderBy: { sortOrder: 'asc' } },
+          extraDetails: { orderBy: { sortOrder: 'asc' } },
         },
       })
       if (!property) throw new TRPCError({ code: 'NOT_FOUND', message: 'ไม่พบที่พัก' })

@@ -36,7 +36,9 @@ interface CreateConfirmedInput extends CreateBookingBase {
 }
 
 interface CreatePendingInput extends CreateBookingBase {
-  paymentDueAt: Date | string
+  /** Optional auto-cancel deadline. When undefined the booking stays PENDING_PAYMENT
+   *  indefinitely until the owner confirms or cancels it manually. */
+  paymentDueAt?: Date | string
   deposit: number
   paymentMethod?: PaymentMethod
 }
@@ -232,7 +234,7 @@ export const BookingService = {
           deposit: input.deposit as unknown as Prisma.Decimal,
           source: 'OWNER_DIRECT' as BookingSource,
           paymentMethod: input.paymentMethod,
-          paymentDueAt: new Date(input.paymentDueAt),
+          paymentDueAt: input.paymentDueAt ? new Date(input.paymentDueAt) : null,
           status: 'PENDING_PAYMENT' as BookingStatus,
           publicNote: input.publicNote,
           internalNote: input.internalNote,

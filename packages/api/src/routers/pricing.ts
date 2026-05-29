@@ -37,6 +37,22 @@ function nightDays(checkinISO: string, checkoutISO: string): Date[] {
 }
 
 export const pricingRouter = router({
+  /**
+   * Quick boolean check: has the owner configured ANY weekly pricing for this variant?
+   * Used by the calendar to surface a "still no pricing — set it up?" prompt on first
+   * click before falling back to the per-day no-price modal.
+   */
+  hasAnyWeeklyPricing: ownerProcedure
+    .input(z.object({ variantId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      await assertVariantOwn(input.variantId, ctx.ownerId)
+      const row = await prisma.variantWeeklyPricing.findFirst({
+        where: { variantId: input.variantId, price: { gt: 0 } },
+        select: { id: true },
+      })
+      return { hasAny: row !== null }
+    }),
+
   /** Get weekly pricing for a variant (returns 7 rows, filling defaults for missing days). */
   weeklyByVariant: ownerProcedure
     .input(z.object({ variantId: z.string() }))
@@ -128,6 +144,10 @@ export const pricingRouter = router({
         /** Original (pre-discount) price — only meaningful when priceType=DISCOUNT.
          *  Used by the UI to render strikethrough original alongside the promo price. */
         originalPrice: z.number().nonnegative().nullable().optional(),
+        /** Original (pre-discount) AGENT price — same role as originalPrice but
+         *  for the agent / OTA price column. Used to render strikethrough on the
+         *  agent-mode calendar. */
+        originalAgentPrice: z.number().nonnegative().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -143,6 +163,15 @@ export const pricingRouter = router({
         input.originalPrice != null &&
         input.originalPrice > input.price
           ? input.originalPrice
+          : null
+      // Same rule for the agent price snapshot — only persist when DISCOUNT AND
+      // the previous agent price is strictly higher than the new one.
+      const agentPriceNow = input.agentPrice ?? 0
+      const originalAgentForSave =
+        input.priceType === 'DISCOUNT' &&
+        input.originalAgentPrice != null &&
+        input.originalAgentPrice > agentPriceNow
+          ? input.originalAgentPrice
           : null
       return prisma.$transaction(async (tx) => {
         const existing = await tx.variantCalendar.findMany({
@@ -163,6 +192,7 @@ export const pricingRouter = router({
               agentPriceOverride: input.agentPrice ?? null,
               priceType: input.priceType ?? null,
               originalPrice: originalPriceForSave,
+              originalAgentPrice: originalAgentForSave,
               note: input.note ?? undefined,
             },
             create: {
@@ -173,6 +203,7 @@ export const pricingRouter = router({
               agentPriceOverride: input.agentPrice ?? null,
               priceType: input.priceType ?? null,
               originalPrice: originalPriceForSave,
+              originalAgentPrice: originalAgentForSave,
               note: input.note ?? null,
             },
           })

@@ -106,33 +106,32 @@ export function PriceTableVertical({ propertyId, onCellClick, priceMode: control
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-gray-200">
-                {/* Month navigator — chevrons + label + วันนี้ all inside one framed pill */}
+                {/* Month navigator — chevrons + label + วันนี้, no background pill */}
                 <th colSpan={2} className="border-r border-gray-200 px-2 py-3">
-                  <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1 py-0.5 shadow-xs">
+                  <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1 py-0.5 shadow-sm">
                     <button
                       type="button"
                       onClick={() => nav(-1)}
-                      className="flex size-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+                      className="flex size-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:text-gray-700"
                       aria-label="เดือนก่อน"
                     >
                       <Icon name="chevronLeft" className="size-3.5" />
                     </button>
-                    <span className="px-2 text-sm font-bold tabular-nums text-gray-900">
+                    <span className="whitespace-nowrap px-2 text-sm font-bold tabular-nums text-gray-900">
                       {formatMonthLabel(view.year, view.month0)}
                     </span>
                     <button
                       type="button"
                       onClick={() => nav(1)}
-                      className="flex size-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+                      className="flex size-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:text-gray-700"
                       aria-label="เดือนถัดไป"
                     >
                       <Icon name="chevronRight" className="size-3.5" />
                     </button>
-                    <span aria-hidden className="mx-0.5 h-4 w-px bg-gray-200" />
                     <button
                       type="button"
                       onClick={() => setView(today)}
-                      className="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+                      className="whitespace-nowrap px-2.5 py-1 text-xs font-semibold text-brand-700 transition-colors hover:text-brand-800"
                       title="กลับไปเดือนปัจจุบัน"
                     >
                       วันนี้
@@ -149,8 +148,16 @@ export function PriceTableVertical({ propertyId, onCellClick, priceMode: control
                       <div className="text-sm font-semibold text-red-600">
                         {isDefault ? 'เหมาหลัง' : 'แบ่งห้องนอน'}
                       </div>
+                      {/* Stats moved here from the property header — bedrooms +
+                          bathrooms (property-level, only on เหมาหลัง) + max guests.
+                          Compact labels (นอน / น้ำ) instead of full words. */}
                       <div className="mt-1 text-[11px] font-medium text-gray-800">
-                        <span className="font-semibold text-gray-900">{v.variant.bedrooms}</span> ห้องนอน,{' '}
+                        <span className="font-semibold text-gray-900">{v.variant.bedrooms}</span> นอน,{' '}
+                        {isDefault && (
+                          <>
+                            <span className="font-semibold text-gray-900">{data.property.totalBathrooms}</span> น้ำ,{' '}
+                          </>
+                        )}
                         <span className="font-semibold text-gray-900">{v.variant.maxGuests}</span> ท่าน
                       </div>
                     </th>

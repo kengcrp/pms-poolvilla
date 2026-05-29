@@ -3,6 +3,18 @@
 import { useEffect, useState } from 'react'
 import { trpc } from '@/lib/trpc'
 import { Button, Icon, type IconName, cn } from '@pms/ui'
+import {
+  KaraokeWarningModal,
+  ParkingModal,
+  PetPolicyModal,
+  PoolModal,
+  blankParking,
+  blankPetPolicy,
+  blankPool,
+  type ParkingDetails,
+  type PetPolicy,
+  type PoolConfig,
+} from '@/components/AmenityConfigModals'
 
 interface Props {
   propertyId: string
@@ -77,9 +89,14 @@ const SECTIONS: Section[] = [
 ]
 
 /**
- * Amenity picker — mirrors the wizard's tile UI exactly. Selections are saved
- * to PropertyAmenity via setAmenities (using the master amenity records).
- * If the master list is empty the picker still works visually but save warns.
+ * Amenity picker — full-feature picker matching the new-listing wizard step.
+ * Selections save to PropertyAmenity via setAmenities.
+ *
+ * Special amenities open the same config modals used by the wizard:
+ *  - pool         → PoolModal (size, system, features, shapes, multi-pool)
+ *  - pet_friendly → PetPolicyModal (max pets, price, cats/dogs)
+ *  - parking      → ParkingModal (indoor/outdoor/project slots + notes)
+ *  - karaoke      → KaraokeWarningModal (copyright warning + Smart TV switch)
  */
 export function AmenitySection({ propertyId }: Props) {
   const utils = trpc.useUtils()
@@ -89,6 +106,15 @@ export function AmenitySection({ propertyId }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [savedAt, setSavedAt] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Modal state
+  const [modalOpen, setModalOpen] = useState<null | 'pool' | 'pet' | 'parking' | 'karaoke'>(null)
+
+  // Detail state for special amenities (UI-only — persistence would require
+  // additional DB fields; right now we just tick the amenity after Save)
+  const [pools, setPools] = useState<PoolConfig[]>([])
+  const [petPolicy, setPetPolicy] = useState<PetPolicy>(blankPetPolicy())
+  const [parking, setParking] = useState<ParkingDetails>(blankParking())
 
   // Hydrate selection from the property's existing amenities — match by master `code`
   useEffect(() => {
@@ -111,6 +137,17 @@ export function AmenitySection({ propertyId }: Props) {
   })
 
   function toggle(code: string) {
+    // Special codes open a config modal before adding (if not already selected).
+    // Already-selected codes just untick on click (no modal).
+    if (!selected.has(code)) {
+      if (code === 'pool') {
+        if (pools.length === 0) setPools([blankPool()])
+        return setModalOpen('pool')
+      }
+      if (code === 'pet_friendly') return setModalOpen('pet')
+      if (code === 'parking') return setModalOpen('parking')
+      if (code === 'karaoke') return setModalOpen('karaoke')
+    }
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(code)) next.delete(code)
@@ -119,10 +156,53 @@ export function AmenitySection({ propertyId }: Props) {
     })
   }
 
+  function confirmAdd(code: string) {
+    setSelected((prev) => new Set(prev).add(code))
+    setModalOpen(null)
+  }
+
+  // Pool modal helpers
+  function updatePool(idx: number, patch: Partial<PoolConfig>) {
+    setPools((arr) => arr.map((p, i) => (i === idx ? { ...p, ...patch } : p)))
+  }
+  function togglePoolFeature(idx: number, code: string) {
+    setPools((arr) =>
+      arr.map((p, i) =>
+        i === idx
+          ? {
+              ...p,
+              features: p.features.includes(code)
+                ? p.features.filter((c) => c !== code)
+                : [...p.features, code],
+            }
+          : p,
+      ),
+    )
+  }
+  function togglePoolShape(idx: number, code: string) {
+    setPools((arr) =>
+      arr.map((p, i) =>
+        i === idx
+          ? {
+              ...p,
+              shapes: p.shapes.includes(code)
+                ? p.shapes.filter((c) => c !== code)
+                : [...p.shapes, code],
+            }
+          : p,
+      ),
+    )
+  }
+  function addAnotherPool() {
+    setPools((arr) => [...arr, blankPool()])
+  }
+  function removePool(idx: number) {
+    setPools((arr) => arr.filter((_, i) => i !== idx))
+  }
+
   function handleSave() {
     setError(null)
     if (!amenityMaster) return
-    // Map selected codes → master IDs (skip codes that don't exist in master)
     const codeToId = new Map(amenityMaster.map((m) => [m.code, m.id]))
     const ids: string[] = []
     for (const code of selected) {
@@ -157,23 +237,15 @@ export function AmenitySection({ propertyId }: Props) {
                   className={cn(
                     'flex items-center gap-3 rounded-xl border-2 bg-white px-3 py-3 text-left transition-all',
                     active
-                      ? 'border-brand-500 bg-brand-50/40 shadow-sm ring-1 ring-brand-500/20'
-                      : 'border-gray-200 hover:border-brand-300 hover:bg-brand-50/20',
+                      ? 'border-brand-500 bg-brand-50/40 shadow-sm'
+                      : 'border-gray-200 hover:border-brand-300 hover:bg-gray-50',
                   )}
-                  aria-pressed={active}
                 >
-                  <div
-                    className={cn(
-                      'flex size-10 shrink-0 items-center justify-center rounded-lg',
-                      active ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600',
-                    )}
-                  >
-                    <Icon name={a.icon} className="size-4" />
-                  </div>
+                  <Icon name={a.icon} className={cn('size-4 shrink-0', active ? 'text-brand-600' : 'text-gray-500')} />
                   <span
                     className={cn(
-                      'flex-1 text-sm font-medium',
-                      active ? 'text-brand-700' : 'text-gray-800',
+                      'min-w-0 flex-1 text-sm',
+                      active ? 'font-semibold text-brand-700' : 'font-medium text-gray-700',
                     )}
                   >
                     {a.label}
@@ -192,15 +264,84 @@ export function AmenitySection({ propertyId }: Props) {
         </div>
       )}
 
-      <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+      {/* Sticky save/cancel bar */}
+      <div className="sticky bottom-0 -mx-5 -mb-5 mt-6 flex items-center justify-between gap-3 border-t border-gray-200 bg-white px-5 py-3 shadow-[0_-4px_15px_rgba(0,0,0,0.04)]">
         <div className="text-xs text-gray-500">
-          {savedAt && `บันทึกล่าสุด ${savedAt.toLocaleTimeString('th-TH')}`}
-          {!savedAt && <span>เลือกแล้ว {selected.size} รายการ</span>}
+          {savedAt
+            ? `บันทึกล่าสุด ${savedAt.toLocaleTimeString('th-TH')}`
+            : `เลือกแล้ว ${selected.size} รายการ`}
         </div>
-        <Button onClick={handleSave} disabled={setAmenities.isPending}>
-          {setAmenities.isPending ? 'กำลังบันทึก...' : 'บันทึก amenities'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              if (!property?.amenities || !amenityMaster) return
+              const masterCodes = new Map(amenityMaster.map((m) => [m.id, m.code]))
+              const set = new Set<string>()
+              for (const a of property.amenities) {
+                const code = masterCodes.get(a.amenityMasterId)
+                if (code) set.add(code)
+              }
+              setSelected(set)
+              setError(null)
+            }}
+            disabled={setAmenities.isPending}
+          >
+            ยกเลิก
+          </Button>
+          <Button onClick={handleSave} disabled={setAmenities.isPending}>
+            {setAmenities.isPending ? 'กำลังบันทึก...' : 'บันทึก'}
+          </Button>
+        </div>
       </div>
+
+      {/* Wizard-grade modals — same UX as the new-listing flow */}
+      {modalOpen === 'pool' && (
+        <PoolModal
+          pools={pools}
+          updatePool={updatePool}
+          togglePoolFeature={togglePoolFeature}
+          togglePoolShape={togglePoolShape}
+          addAnotherPool={addAnotherPool}
+          removePool={removePool}
+          onCancel={() => setModalOpen(null)}
+          onSave={() => confirmAdd('pool')}
+        />
+      )}
+
+      {modalOpen === 'pet' && (
+        <PetPolicyModal
+          policy={petPolicy}
+          updatePolicy={(patch) => setPetPolicy((p) => ({ ...p, ...patch }))}
+          onCancel={() => setModalOpen(null)}
+          onSave={() => confirmAdd('pet_friendly')}
+        />
+      )}
+
+      {modalOpen === 'parking' && (
+        <ParkingModal
+          parking={parking}
+          updateParking={(patch) => setParking((p) => ({ ...p, ...patch }))}
+          onCancel={() => setModalOpen(null)}
+          onSave={() => confirmAdd('parking')}
+        />
+      )}
+
+      {modalOpen === 'karaoke' && (
+        <KaraokeWarningModal
+          onAcknowledge={() => confirmAdd('karaoke')}
+          onSwitchToSmartTv={() => {
+            // Switch suggestion: untick karaoke (if was about to be added) + tick smart_tv
+            setSelected((prev) => {
+              const next = new Set(prev)
+              next.delete('karaoke')
+              next.add('smart_tv')
+              return next
+            })
+            setModalOpen(null)
+          }}
+        />
+      )}
     </div>
   )
 }

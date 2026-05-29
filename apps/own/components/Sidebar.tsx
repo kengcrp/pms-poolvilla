@@ -18,6 +18,8 @@ interface MenuItem {
   icon: IconName
   /** Slug used to look up a per-item live badge count (handled below). */
   badgeKey?: 'postpone'
+  /** Premium-only feature — shows a small crown overlay on the icon */
+  premium?: boolean
 }
 interface MenuGroup {
   /** i18n key for group title */
@@ -34,7 +36,6 @@ const menu: MenuGroup[] = [
       { href: '/manage/listings', labelKey: 'menu.listings', icon: 'home' },
       { href: '/manage/postpone', labelKey: 'menu.postpone', icon: 'postpone', badgeKey: 'postpone' },
       { href: '/manage/housekeeper', labelKey: 'menu.housekeeper', icon: 'broom' },
-      { href: '/manage/coupons', labelKey: 'menu.coupons', icon: 'ticket' },
       { href: '/manage/accounting', labelKey: 'menu.accounting', icon: 'invoice' },
     ],
   },
@@ -46,8 +47,25 @@ const menu: MenuGroup[] = [
     ],
   },
   {
+    // All "เซลเพจ" items are premium-only — crown badge shown on each icon.
+    // "ธีม Sale Page" accessible via ตั้งค่าทั่วไป page (card with "จัดการ" link).
+    // คูปอง moved here because coupons are issued for Sale Page promotions.
+    groupKey: 'menu.group.salePage',
+    items: [
+      { href: '/manage/sale-page/bookings', labelKey: 'menu.salePageBookings', icon: 'bookings', premium: true },
+      { href: '/manage/coupons',            labelKey: 'menu.coupons',          icon: 'ticket',   premium: true },
+      { href: '/manage/sale-page/videos',   labelKey: 'menu.salePageVideos',   icon: 'images',   premium: true },
+    ],
+  },
+  {
     groupKey: 'menu.group.other',
-    items: [{ href: '/manage/payout-channels', labelKey: 'menu.payoutChannels', icon: 'bank' }],
+    items: [
+      // "ช่องทางการรับเงิน" removed from sidebar — accessible via the
+      // ตั้งค่าทั่วไป page (card with "จัดการ" link).
+      { href: '/manage/settings',  labelKey: 'menu.settings', icon: 'gear', premium: true },
+      { href: '/manage/manual',    labelKey: 'menu.manual',   icon: 'info' },
+      { href: '/manage/premium',   labelKey: 'menu.premium',  icon: 'star' },
+    ],
   },
 ]
 
@@ -116,7 +134,9 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
       <aside
         className={cn(
           'fixed inset-y-0 left-0 z-40 w-64 shrink-0 transform border-r border-gray-200 bg-white transition-transform duration-200 ease-out',
-          'lg:static lg:translate-x-0',
+          // Desktop: sticky to viewport top so the menu stays visible while the
+          // page scrolls (was lg:static — sidebar scrolled away with content).
+          'lg:sticky lg:top-0 lg:h-screen lg:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >
@@ -144,7 +164,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
         <nav className="overflow-y-auto px-3 py-4" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
           {menu.map((group) => (
             <div key={group.groupKey} className="mb-5 last:mb-0">
-              <div className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+              <div className="px-3 pb-2 text-sm font-bold text-gray-900">
                 {t(group.groupKey)}
               </div>
               <ul className="space-y-0.5">
@@ -157,13 +177,52 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                         href={item.href}
                         onClick={onClose}
                         className={cn(
-                          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                          'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
                           active
-                            ? 'bg-brand-50 font-semibold text-brand-700'
+                            ? 'font-bold text-brand-600'
                             : 'text-gray-700 hover:bg-gray-100',
                         )}
                       >
-                        <Icon name={item.icon} fixedWidth className="size-4 text-gray-500" />
+                        {/* Left accent bar — vertical brand-blue rounded line
+                            shown only when this item is the active route. */}
+                        {active && (
+                          <span
+                            aria-hidden
+                            className="absolute -left-2 top-1/2 h-6 w-1 -translate-y-1/2 rounded-full bg-brand-600"
+                          />
+                        )}
+                        {/* Icon (relative so the crown overlay anchors to it).
+                            Slightly larger so the crown badge fits visibly. */}
+                        <span className="relative shrink-0">
+                          <Icon
+                            name={item.icon}
+                            fixedWidth
+                            className={cn('size-5', active ? 'text-brand-600' : 'text-gray-700')}
+                          />
+                          {item.premium && (
+                            <span
+                              aria-label="premium"
+                              title="ฟีเจอร์ Premium"
+                              className="absolute -right-1.5 -top-1.5 leading-none drop-shadow-sm"
+                            >
+                              {/* Flat yellow crown — 3 spikes with circles on top,
+                                  wavy base. Inlined SVG for a consistent flat look
+                                  across platforms (emoji 👑 renders differently
+                                  per OS). */}
+                              <svg
+                                viewBox="0 0 24 18"
+                                aria-hidden
+                                className="size-3.5"
+                                fill="#FBBF24"
+                              >
+                                <path d="M3 16 L1.5 6.5 L6.5 10 L12 3 L17.5 10 L22.5 6.5 L21 16 Z" />
+                                <circle cx="1.5" cy="5.5" r="1.5" />
+                                <circle cx="12" cy="2"   r="1.7" />
+                                <circle cx="22.5" cy="5.5" r="1.5" />
+                              </svg>
+                            </span>
+                          )}
+                        </span>
                         <span className="flex-1">{t(item.labelKey)}</span>
                         {badge && badge.count > 0 && (
                           <span

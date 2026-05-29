@@ -39,6 +39,8 @@ export function DayPriceModal({ open, onClose, variantId, variantLabel, initialD
      *  when user picks "โปรโมชั่น (ลดราคา)" so the strikethrough comparison
      *  displays correctly in the calendar/pricing views. */
     originalPrice: 0,
+    /** Same anchor as `originalPrice` but for the agent / OTA column. */
+    originalAgentPrice: 0,
   })
 
   // Load current price / override for the clicked date (single-night preview)
@@ -63,6 +65,7 @@ export function DayPriceModal({ open, onClose, variantId, variantLabel, initialD
       tag: 'NORMAL',
       note: '',
       originalPrice: 0,
+      originalAgentPrice: 0,
     })
   }, [open, dateStr, nextDayStr])
 
@@ -84,6 +87,10 @@ export function DayPriceModal({ open, onClose, variantId, variantLabel, initialD
       // Otherwise treat the current `price` as the "original" baseline so toggling
       // to DISCOUNT pre-fills sensibly (owner just lowers the price field).
       originalPrice: todayData.originalPrice ?? todayData.price ?? 0,
+      // Same logic for agent price — fall back to current agent price as the
+      // pre-discount anchor when no stored original exists yet.
+      originalAgentPrice:
+        todayData.originalAgentPrice ?? todayData.agentPrice ?? 0,
     }))
   }, [todayData])
 
@@ -124,6 +131,11 @@ export function DayPriceModal({ open, onClose, variantId, variantLabel, initialD
       // new price) — server enforces the same rule.
       originalPrice:
         form.tag === 'DISCOUNT' && form.originalPrice > form.price ? form.originalPrice : null,
+      // Same rule for the agent column.
+      originalAgentPrice:
+        form.tag === 'DISCOUNT' && form.originalAgentPrice > form.agentPrice
+          ? form.originalAgentPrice
+          : null,
       note: form.note || null,
     })
   }
@@ -190,6 +202,20 @@ export function DayPriceModal({ open, onClose, variantId, variantLabel, initialD
               onChange={(v) => setForm({ ...form, price: v })}
               className="text-lg font-semibold tabular-nums"
             />
+            {/* Discount preview — when DISCOUNT is on AND price < originalPrice,
+                show a small strikethrough hint so the owner sees what the calendar
+                will render WITHOUT needing a separate "ราคาเดิม" field. */}
+            {form.tag === 'DISCOUNT' && form.originalPrice > form.price && form.price > 0 && (
+              <p className="mt-1.5 text-[11px] text-gray-600">
+                <span className="text-gray-400 line-through">
+                  ฿{form.originalPrice.toLocaleString('en-US')}
+                </span>{' '}
+                <span className="font-semibold text-red-600">
+                  ฿{form.price.toLocaleString('en-US')}
+                </span>{' '}
+                <span className="text-gray-400">(จะแสดงแบบนี้บนปฏิทิน)</span>
+              </p>
+            )}
           </div>
           <div className="rounded-xl bg-amber-50/50 p-4 ring-1 ring-inset ring-amber-100">
             <Label>ราคาส่ง / Agent (฿)</Label>
@@ -203,42 +229,23 @@ export function DayPriceModal({ open, onClose, variantId, variantLabel, initialD
             <p className="mt-1 text-[11px] text-gray-500">
               ปล่อยเป็น 0 = ใช้ค่ารายสัปดาห์ที่ตั้งไว้
             </p>
+            {/* Agent-price discount preview — mirrors the ราคาขาย preview so the
+                owner sees the strikethrough that the agent-mode calendar will render. */}
+            {form.tag === 'DISCOUNT' &&
+              form.originalAgentPrice > form.agentPrice &&
+              form.agentPrice > 0 && (
+                <p className="mt-1.5 text-[11px] text-gray-600">
+                  <span className="text-gray-400 line-through">
+                    ฿{form.originalAgentPrice.toLocaleString('en-US')}
+                  </span>{' '}
+                  <span className="font-semibold text-red-600">
+                    ฿{form.agentPrice.toLocaleString('en-US')}
+                  </span>{' '}
+                  <span className="text-gray-400">(โหมด Agent)</span>
+                </p>
+              )}
           </div>
         </div>
-
-        {/* DISCOUNT-only: original price input + preview */}
-        {form.tag === 'DISCOUNT' && (
-          <div className="mt-5 rounded-xl border-2 border-red-200 bg-red-50/40 p-4">
-            <div className="mb-2 flex items-center gap-1.5">
-              <span className="text-base">🏷</span>
-              <span className="text-sm font-bold text-gray-900">โปรโมชั่นลดราคา</span>
-            </div>
-            <Label>ราคาเดิม (ก่อนลด)</Label>
-            <NumberInput
-              value={form.originalPrice}
-              onChange={(v) => setForm({ ...form, originalPrice: v })}
-              className="text-lg font-semibold tabular-nums"
-              placeholder="0"
-            />
-            <p className="mt-1.5 text-[11px] text-gray-500">
-              ราคาเดิมต้องสูงกว่าราคาขายปัจจุบัน — ใช้สำหรับแสดง "ขีดราคา" บนปฏิทิน
-            </p>
-
-            {/* Live preview — ขีดราคาเดิม + ราคาใหม่สีแดง */}
-            {form.originalPrice > form.price && (
-              <div className="mt-3 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm">
-                <span className="text-xs text-gray-500">ตัวอย่างที่แสดง:</span>{' '}
-                <span className="text-gray-400 line-through">
-                  ฿{form.originalPrice.toLocaleString()}
-                </span>{' '}
-                <span className="font-bold text-red-600">฿{form.price.toLocaleString()}</span>{' '}
-                <span className="ml-1 text-[11px] font-semibold text-red-600">
-                  -{Math.round(((form.originalPrice - form.price) / form.originalPrice) * 100)}%
-                </span>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Tag radios */}
         <div className="mt-5">
@@ -256,7 +263,25 @@ export function DayPriceModal({ open, onClose, variantId, variantLabel, initialD
                 <button
                   key={opt.val}
                   type="button"
-                  onClick={() => setForm({ ...form, tag: opt.val })}
+                  onClick={() =>
+                    setForm((f) => {
+                      const enteringDiscount =
+                        opt.val === 'DISCOUNT' && f.tag !== 'DISCOUNT'
+                      return {
+                        ...f,
+                        tag: opt.val,
+                        // Snapshot the current ราคาขาย as the "before discount"
+                        // anchor whenever owner transitions INTO DISCOUNT — they
+                        // just lower the existing price field and the system
+                        // remembers the previous value automatically.
+                        originalPrice: enteringDiscount ? f.price : f.originalPrice,
+                        // Same snapshot for the agent price column.
+                        originalAgentPrice: enteringDiscount
+                          ? f.agentPrice
+                          : f.originalAgentPrice,
+                      }
+                    })
+                  }
                   className={cn(
                     'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors',
                     active

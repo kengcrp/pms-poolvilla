@@ -123,10 +123,24 @@ export function SplitPricingPanel({ open, onClose, propertyId }: Props) {
                 return (
                   <Card key={v.id} className="overflow-hidden">
                     <div className="border-b border-gray-100 px-4 pb-3 pt-4">
-                      <h3 className="text-base font-bold text-red-600">{vName}</h3>
-                      <div className="mt-1 flex items-center gap-1.5 text-xs font-medium text-gray-800">
-                        <Icon name="users" className="size-3 text-gray-600" />
-                        <span>สำหรับ <span className="font-semibold text-gray-900">{v.maxGuests}</span> ท่าน</span>
+                      {/* Variant badge — matches SplitCalendarPanel so the user
+                          identifies the split variant without a separate title row. */}
+                      <div className="mb-2">
+                        <span className="inline-flex items-center rounded-full bg-red-500 px-3 py-1 text-sm font-semibold text-white shadow-sm">
+                          แบ่งเปิด
+                        </span>
+                      </div>
+                      {/* Title removed — bedroom + guest counts below differentiate variants.
+                          Text brand blue; icons stay neutral gray. */}
+                      <div className="mt-2 flex items-center gap-4 text-base font-semibold text-brand-700">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Icon name="bed" className="size-4 text-gray-600" />
+                          <span>{v.bedrooms}</span> ห้องนอน
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Icon name="users" className="size-4 text-gray-600" />
+                          สำหรับ <span>{v.maxGuests}</span> ท่าน
+                        </span>
                       </div>
                     </div>
                     <div className="space-y-3 p-4">

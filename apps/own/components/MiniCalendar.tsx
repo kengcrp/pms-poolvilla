@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { trpc } from '@/lib/trpc'
 import { buildMonthGrid, THAI_DOW_SHORT, THAI_MONTHS, ymd } from '@/lib/date'
 import { Icon, cn } from '@pms/ui'
+import { WeeklyPricingModal } from './WeeklyPricingModal'
 
 interface Props {
   variantId: string
@@ -64,6 +65,82 @@ export function MiniCalendar({
   const priceMode = controlledPriceMode ?? internalPriceMode
   const isPriceModeControlled = controlledPriceMode !== undefined
   const setPriceMode = setInternalPriceMode
+
+  // No-price warning modal — opens when owner clicks a date that has no price yet.
+  // Owner can choose: set a price OR lock the date as unavailable.
+  // Suppressed via localStorage when "ไม่ต้องแสดงอีก" is ticked.
+  const [noPriceModal, setNoPriceModal] = useState<null | { date: Date }>(null)
+  // Property-level "no pricing configured at all" modal — opens on first calendar
+  // click for a property whose owner hasn't set ANY weekly pricing yet.
+  // Stores the clicked date so "ไว้ก่อน" can continue with the booking flow.
+  const [noPropertyPricingModal, setNoPropertyPricingModal] = useState<
+    null | { date: Date; hasPrice: boolean }
+  >(null)
+  // When owner clicks "ปรับราคาเลย" inside the prompt, we open the weekly-pricing
+  // modal directly on top of the current view instead of navigating to /manage/pricing.
+  const [weeklyOpen, setWeeklyOpen] = useState(false)
+
+  // Cheap boolean: does this variant have ANY weekly pricing row with price > 0?
+  // When false, the very first cell click on the calendar prompts the owner to go
+  // set pricing instead of opening the per-day modal.
+  const { data: pricingInfo } = trpc.pricing.hasAnyWeeklyPricing.useQuery({ variantId })
+  const propertyHasPricing = pricingInfo?.hasAny ?? true // optimistic: don't nag while loading
+
+  // Variant summary — name, maxGuests, partnerListing — needed for WeeklyPricingModal.
+  // Lazy-fetched only when the weekly modal is about to open (no upfront cost).
+  const { data: variantSummary } = trpc.variant.summary.useQuery(
+    { variantId },
+    { enabled: weeklyOpen },
+  )
+
+  /** Per-day continuation — runs gate 2 (cell-level no-price warning) then
+   *  invokes the caller's onCellClick. Shared between the direct click path and
+   *  the "ไว้ก่อน" path of the property-level modal. */
+  function continueCellClick(date: Date, hasPrice: boolean) {
+    if (!onCellClick) return
+    if (hasPrice) return onCellClick(date)
+    if (typeof window !== 'undefined') {
+      try {
+        if (localStorage.getItem('pms.noPriceWarning.dismissed') === '1') {
+          return onCellClick(date)
+        }
+      } catch {
+        /* localStorage unavailable — fall through to show modal */
+      }
+    }
+    setNoPriceModal({ date })
+  }
+
+  /** Wrapper around onCellClick — runs through two gates before the actual click:
+   *  1. Property-level: has owner set up ANY pricing? If not → prompt to go to ปรับราคา.
+   *  2. Cell-level: does THIS date have a price? If not → existing per-day warning. */
+  function handleCellClick(date: Date, hasPrice: boolean) {
+    if (!onCellClick) return
+
+    // Gate 1 — property-level. If this variant has no weekly pricing at all yet,
+    // show the "set up pricing first?" modal. Honors a PER-VARIANT "ไม่ต้องแสดงอีก"
+    // opt-out so dismissing on one property doesn't silence the prompt for others.
+    if (!propertyHasPricing) {
+      const dismissed =
+        typeof window !== 'undefined' &&
+        (() => {
+          try {
+            return (
+              localStorage.getItem(`pms.noPropertyPricing.dismissed:${variantId}`) === '1'
+            )
+          } catch {
+            return false
+          }
+        })()
+      if (!dismissed) {
+        setNoPropertyPricingModal({ date, hasPrice })
+        return
+      }
+      // Owner opted out for THIS property → fall through to gate 2 / normal click
+    }
+
+    continueCellClick(date, hasPrice)
+  }
 
   const grid = useMemo(() => buildMonthGrid(view.year, view.month0), [view])
   const from = grid[0]!.date
@@ -300,14 +377,13 @@ export function MiniCalendar({
         </div>
       )}
 
-      {/* Month nav — all controls (◀ month ▶ + วันนี้) live inside ONE framed pill,
-          centered on the row so it reads as a single grouped control. */}
+      {/* Month nav — chevrons + label + วันนี้, no background pill (flat layout). */}
       <div className="mb-3 flex items-center justify-center">
-        <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1 py-0.5 shadow-xs">
+        <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1 py-0.5 shadow-sm">
           <button
             type="button"
             onClick={() => nav(-1)}
-            className="flex size-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+            className="flex size-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:text-gray-700"
             aria-label="เดือนก่อน"
           >
             <Icon name="chevronLeft" className="size-3.5" />
@@ -318,17 +394,15 @@ export function MiniCalendar({
           <button
             type="button"
             onClick={() => nav(1)}
-            className="flex size-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+            className="flex size-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:text-gray-700"
             aria-label="เดือนถัดไป"
           >
             <Icon name="chevronRight" className="size-3.5" />
           </button>
-          {/* "วันนี้" — also inside the same pill, separated by a thin vertical divider */}
-          <span aria-hidden className="mx-0.5 h-4 w-px bg-gray-200" />
           <button
             type="button"
             onClick={() => setView(today)}
-            className="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+            className="whitespace-nowrap px-2.5 py-1 text-xs font-semibold text-brand-700 transition-colors hover:text-brand-800"
             title="กลับไปเดือนปัจจุบัน"
           >
             วันนี้
@@ -439,12 +513,17 @@ export function MiniCalendar({
                     isDiscount ? (
                       // Tight stack: strikethrough original + actual price standard, leading-none
                       // so the 2-line price never overflows the cell's vertical bounds.
-                      // Use the real originalPrice when stored; fall back to a 25% bump for legacy
-                      // discounts that don't have one captured yet.
+                      // Mode-aware: sell mode uses `originalPrice`, agent mode uses
+                      // `originalAgentPrice`. Fall back to 25% bump if not stored
+                      // (legacy discounts before the snapshot feature shipped).
                       (() => {
+                        const storedOriginal =
+                          priceMode === 'agent'
+                            ? dayData?.originalAgentPrice
+                            : dayData?.originalPrice
                         const original =
-                          dayData?.originalPrice != null && dayData.originalPrice > price
-                            ? dayData.originalPrice
+                          storedOriginal != null && storedOriginal > price
+                            ? storedOriginal
                             : Math.round(price * 1.25)
                         return (
                           <div className="flex flex-col items-center gap-0 leading-none">
@@ -578,7 +657,7 @@ export function MiniCalendar({
               <button
                 key={i}
                 type="button"
-                onClick={() => onCellClick(cell.date)}
+                onClick={() => handleCellClick(cell.date, safePrice !== null)}
                 title={(() => {
                   const prefix = fromSibling ? '🔒 (รูปแบบห้องอื่น) ' : ''
                   if (effectiveStatus === 'BOOKED') {
@@ -609,6 +688,251 @@ export function MiniCalendar({
       </div>
 
       {isPending && <div className="mt-2 text-center text-[11px] text-gray-400">กำลังโหลด...</div>}
+
+      {/* Property-level no-pricing modal — fires on FIRST calendar click for a
+          property whose owner hasn't set any weekly pricing yet.
+          "ไว้ก่อน" continues to the booking flow for the date that was clicked. */}
+      {noPropertyPricingModal && (
+        <NoPropertyPricingModal
+          variantId={variantId}
+          onClose={() => setNoPropertyPricingModal(null)}
+          onSkip={() => {
+            const pending = noPropertyPricingModal
+            setNoPropertyPricingModal(null)
+            continueCellClick(pending.date, pending.hasPrice)
+          }}
+          onSetPricing={() => {
+            setNoPropertyPricingModal(null)
+            setWeeklyOpen(true)
+          }}
+        />
+      )}
+
+      {/* Weekly pricing modal — opens directly when owner picks "ปรับราคาเลย"
+          from the no-pricing prompt, scoped to THIS variant. After saving the
+          `hasAnyWeeklyPricing` query refetches and the prompt stops appearing. */}
+      <WeeklyPricingModal
+        open={weeklyOpen && !!variantSummary}
+        onClose={() => setWeeklyOpen(false)}
+        variantId={variantSummary?.id ?? null}
+        variantName={variantSummary?.name ?? ''}
+        initialMaxGuests={variantSummary?.maxGuests ?? 1}
+        partnerListing={variantSummary?.partnerListing ?? false}
+        isDefault={variantSummary?.isDefault ?? false}
+      />
+
+      {/* No-price warning modal — only shown when owner clicks an unpriced date
+          and hasn't opted out via localStorage. */}
+      {noPriceModal && (
+        <NoPriceWarningModal
+          date={noPriceModal.date}
+          onSetPrice={() => {
+            setNoPriceModal(null)
+            // Continue to normal click → opens the day-edit modal (where they
+            // can set a price). Same destination as a priced cell.
+            onCellClick?.(noPriceModal.date)
+          }}
+          onLockDate={() => {
+            setNoPriceModal(null)
+            // Same destination — owner picks "ปิดซ่อม" status inside the day-edit modal.
+            // (No separate "lock-only" endpoint yet; same modal covers both.)
+            onCellClick?.(noPriceModal.date)
+          }}
+          onClose={() => setNoPriceModal(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Property-level prompt — shown the first time the owner clicks a calendar cell
+ * on a property that has zero weekly pricing rows. Steers them to ปรับราคา.
+ */
+function NoPropertyPricingModal({
+  variantId,
+  onClose,
+  onSkip,
+  onSetPricing,
+}: {
+  /** Property scope — dismissal is keyed by variantId so other properties still prompt. */
+  variantId: string
+  /** Backdrop / × — abandons the click entirely (no booking flow). */
+  onClose: () => void
+  /** "ไว้ก่อน" — closes the modal and continues to the booking flow. */
+  onSkip: () => void
+  /** "ปรับราคาเลย" — closes this modal and opens the weekly-pricing modal
+   *  directly for this variant (no page navigation needed). */
+  onSetPricing: () => void
+}) {
+  const [dontShowAgain, setDontShowAgain] = useState(false)
+
+  function rememberPreference() {
+    if (!dontShowAgain) return
+    try {
+      localStorage.setItem(`pms.noPropertyPricing.dismissed:${variantId}`, '1')
+    } catch {
+      /* localStorage unavailable */
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close (top-right) */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="ปิด"
+          className="absolute right-3 top-3 z-10 flex size-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+        >
+          <Icon name="close" className="size-4" />
+        </button>
+
+        {/* Title only — icon + description removed per design */}
+        <div className="px-6 pb-2 pt-10 text-center">
+          <h2 className="text-lg font-bold text-gray-900">บ้านหลังนี้ยังไม่มีการตั้งราคา</h2>
+        </div>
+
+        {/* Footer actions — primary CTA + ghost skip */}
+        <div className="mt-4 grid grid-cols-2 gap-2 px-6">
+          <button
+            type="button"
+            onClick={() => {
+              rememberPreference()
+              onSkip()
+            }}
+            className="rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-200"
+          >
+            ไว้ก่อน
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              rememberPreference()
+              onSetPricing()
+            }}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2.5 text-center text-sm font-bold text-white shadow-sm shadow-brand-600/30 transition-colors hover:bg-brand-700"
+          >
+            ปรับราคาเลย
+            <Icon name="arrowRight" className="size-3.5" />
+          </button>
+        </div>
+
+        {/* Don't-show-again — moved to the very bottom + larger text,
+            separated from the buttons by a thin divider. */}
+        <div className="mt-4 border-t border-gray-100 px-6 pb-6 pt-4">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-600">
+            <input
+              type="checkbox"
+              checked={dontShowAgain}
+              onChange={(e) => setDontShowAgain(e.target.checked)}
+              className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+            />
+            ไม่ต้องแสดงอีก
+          </label>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Warning dialog shown when owner clicks a date that has no price set yet. */
+function NoPriceWarningModal({
+  date,
+  onSetPrice,
+  onLockDate,
+  onClose,
+}: {
+  date: Date
+  onSetPrice: () => void
+  onLockDate: () => void
+  onClose: () => void
+}) {
+  const dateLabel = `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`
+  const [dontShowAgain, setDontShowAgain] = useState(false)
+
+  function rememberPreference() {
+    if (!dontShowAgain) return
+    try {
+      localStorage.setItem('pms.noPriceWarning.dismissed', '1')
+    } catch {
+      /* localStorage unavailable */
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3 px-5 pt-5">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+            <Icon name="alert" className="size-5" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-base font-bold text-gray-900">
+              วันที่ {dateLabel} ยังไม่ได้ตั้งราคา
+            </h2>
+            <p className="mt-1 text-sm leading-relaxed text-gray-600">
+              ต้องการใส่ราคาให้วันนี้ หรือล็อควันเลย?
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="ปิด"
+            className="-mr-1 flex size-7 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <Icon name="close" className="size-3.5" />
+          </button>
+        </div>
+
+        {/* Don't-show-again checkbox */}
+        <label className="mx-5 mt-4 flex cursor-pointer items-center gap-2 text-xs text-gray-600">
+          <input
+            type="checkbox"
+            checked={dontShowAgain}
+            onChange={(e) => setDontShowAgain(e.target.checked)}
+            className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+          />
+          ไม่ต้องแสดงอีก
+        </label>
+
+        {/* Footer — 2 stacked options */}
+        <div className="mt-4 space-y-2 border-t border-gray-100 bg-gray-50/40 px-5 py-4">
+          <button
+            type="button"
+            onClick={() => {
+              rememberPreference()
+              onSetPrice()
+            }}
+            className="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-brand-700"
+          >
+            ใส่ราคา
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              rememberPreference()
+              onLockDate()
+            }}
+            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            ไม่ใส่ราคา ล็อควันเลย
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

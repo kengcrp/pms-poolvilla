@@ -141,24 +141,11 @@ export function SplitCalendarPanel({
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
+                        {/* Name only — code + bed/bath chips removed to keep the
+                            split-room header minimal. Stats still visible per-variant below. */}
                         <h3 className="truncate text-lg font-bold tracking-tight text-gray-900">
                           {name}
                         </h3>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-gray-600">
-                          <code className="rounded-md bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-700">
-                            {property.code}
-                          </code>
-                          <span className="inline-flex items-center gap-1.5 rounded-md bg-gray-50 px-2 py-0.5 ring-1 ring-inset ring-gray-200">
-                            <Icon name="bed" className="size-3.5 text-gray-700" />
-                            <span className="font-semibold tabular-nums text-gray-900">{property.totalBedrooms}</span>
-                            <span className="text-xs font-medium text-gray-700">ห้องนอน</span>
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 rounded-md bg-gray-50 px-2 py-0.5 ring-1 ring-inset ring-gray-200">
-                            <Icon name="bath" className="size-3.5 text-gray-700" />
-                            <span className="font-semibold tabular-nums text-gray-900">{property.totalBathrooms}</span>
-                            <span className="text-xs font-medium text-gray-700">ห้องน้ำ</span>
-                          </span>
-                        </div>
                       </div>
                     </div>
                   </Card>
@@ -186,25 +173,24 @@ export function SplitCalendarPanel({
                         <div className="mb-2">
                           <span
                             className={cn(
-                              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white',
+                              'inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold text-white shadow-sm',
                               isDef ? 'bg-brand-600' : 'bg-red-500',
                             )}
                           >
-                            <Icon name={isDef ? 'home' : 'bed'} className="size-2.5" />
                             {isDef ? 'เปิดทั้งหลัง' : 'แบ่งเปิด'}
                           </span>
                         </div>
-                        <h3 className={cn('text-base font-bold', isDef ? 'text-brand-700' : 'text-red-600')}>
-                          {vName}
-                        </h3>
-                        <div className="mt-1 flex items-center gap-3 text-xs font-medium text-gray-800">
-                          <span className="inline-flex items-center gap-1">
-                            <Icon name="bed" className="size-3 text-gray-600" />
-                            <span className="font-semibold text-gray-900">{v.bedrooms}</span> ห้องนอน
+                        {/* Title heading removed — badge above + bed/guest row below
+                            already convey the variant identity. Text is brand blue;
+                            icons stay neutral gray per design preference. */}
+                        <div className="mt-2 flex items-center gap-4 text-base font-semibold text-brand-700">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Icon name="bed" className="size-4 text-gray-600" />
+                            <span>{v.bedrooms}</span> ห้องนอน
                           </span>
-                          <span className="inline-flex items-center gap-1">
-                            <Icon name="users" className="size-3 text-gray-600" />
-                            สำหรับ <span className="font-semibold text-gray-900">{v.maxGuests}</span> ท่าน
+                          <span className="inline-flex items-center gap-1.5">
+                            <Icon name="users" className="size-4 text-gray-600" />
+                            สำหรับ <span>{v.maxGuests}</span> ท่าน
                           </span>
                         </div>
                       </div>

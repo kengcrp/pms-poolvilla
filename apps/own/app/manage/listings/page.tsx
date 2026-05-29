@@ -81,6 +81,7 @@ interface PropertyCardProps {
     totalBedrooms: number
     totalBathrooms: number
     isActive: boolean
+    showOnSalePage: boolean
     reviewStatus: string
     variants: { id: string; isDefault: boolean }[]
     images: { url: string }[]
@@ -98,6 +99,31 @@ interface PropertyCardProps {
 function PropertyCard({ p, slug, status }: PropertyCardProps) {
   const utils = trpc.useUtils()
   const [confirmOpen, setConfirmOpen] = useState(false)
+  // Sale Page visibility — persisted via property.showOnSalePage column.
+  // Optimistic update so the switch flips instantly even on slow connections.
+  // We snapshot the current cache, write the inverted value, then reconcile
+  // with the server response (rolling back on error).
+  const toggleSalePage = trpc.property.toggleSalePage.useMutation({
+    onMutate: async ({ id }) => {
+      await utils.property.list.cancel()
+      const prev = utils.property.list.getData()
+      utils.property.list.setData(undefined, (curr) =>
+        curr
+          ? {
+              ...curr,
+              properties: curr.properties.map((item) =>
+                item.id === id ? { ...item, showOnSalePage: !item.showOnSalePage } : item,
+              ),
+            }
+          : curr,
+      )
+      return { prev }
+    },
+    onError: (_e, _vars, ctx) => {
+      if (ctx?.prev) utils.property.list.setData(undefined, ctx.prev)
+    },
+    onSettled: () => utils.property.list.invalidate(),
+  })
   const remove = trpc.property.delete.useMutation({
     onSuccess: () => {
       utils.property.list.invalidate()
@@ -172,11 +198,21 @@ function PropertyCard({ p, slug, status }: PropertyCardProps) {
         <h3 className="truncate text-lg font-bold tracking-tight text-gray-900">
           {name}
         </h3>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <Badge variant={status.variant} dot>
-            {status.label}
-          </Badge>
-          {!p.isActive && <Badge variant="default">หยุดให้บริการ</Badge>}
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={status.variant} dot>
+              {status.label}
+            </Badge>
+            {!p.isActive && <Badge variant="default">หยุดให้บริการ</Badge>}
+          </div>
+
+          {/* Sale Page toggle — when ON, this property + its full details show
+              on the public Sale Page (/s/[code]). OFF hides it from customers. */}
+          <SalePageToggle
+            on={p.showOnSalePage}
+            disabled={toggleSalePage.isPending}
+            onChange={() => toggleSalePage.mutate({ id: p.id })}
+          />
         </div>
 
         {/* ── Sharable price links (label removed for a cleaner layout) ── */}
@@ -419,11 +455,13 @@ function ShareLinkToolbar({ slug }: ShareLinkToolbarProps) {
     accent: 'primary' | 'accent'
     /** Internal route to navigate to on left-button click. If omitted, opens the public sale page. */
     internalHref?: string
+    /** Show the small crown overlay (premium feature). */
+    premium?: boolean
   }[] = [
     { key: 'sell',      label: 'รวมโชว์ราคาขาย', query: '?price=sell',      accent: 'primary', internalHref: '/listings-calendar/sell' },
     { key: 'wholesale', label: 'รวมโชว์ราคาส่ง', query: '?price=wholesale', accent: 'primary', internalHref: '/listings-calendar/wholesale' },
     { key: 'hide',      label: 'รวมไม่โชว์ราคา', query: '?price=hide',      accent: 'primary', internalHref: '/listings-calendar/hide' },
-    { key: 'default',   label: 'ที่พัก SalePage', query: '',                accent: 'accent'  },
+    { key: 'default',   label: 'ที่พัก SalePage', query: '',                accent: 'accent', internalHref: slug ? `/s/${slug}` : '/s/demo', premium: true },
   ]
   return (
     <div className="mb-5 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -435,6 +473,7 @@ function ShareLinkToolbar({ slug }: ShareLinkToolbarProps) {
           query={b.query}
           accent={b.accent}
           internalHref={b.internalHref}
+          premium={b.premium}
         />
       ))}
     </div>
@@ -451,6 +490,7 @@ function ShareLinkSplitButton({
   query,
   accent,
   internalHref,
+  premium,
 }: {
   label: string
   slug: string | null | undefined
@@ -458,6 +498,8 @@ function ShareLinkSplitButton({
   accent: 'primary' | 'accent'
   /** If set, the LEFT button navigates here internally instead of opening the public sale page. */
   internalHref?: string
+  /** Show a flat-yellow crown badge in the corner — premium feature marker. */
+  premium?: boolean
 }) {
   const [copied, setCopied] = useState(false)
   // Both buttons share the same target URL — disabled when there's nothing to point at
@@ -494,11 +536,29 @@ function ShareLinkSplitButton({
   const iconText = accent === 'primary' ? 'text-brand-600' : 'text-amber-600'
 
   return (
-    <div
-      className={cn(
-        'flex h-12 overflow-hidden rounded-xl shadow-sm',
+    <div className="relative">
+      {/* Premium crown — flat yellow SVG, sits outside the rounded clip. */}
+      {premium && (
+        <span
+          aria-label="premium"
+          title="ฟีเจอร์ Premium"
+          className="pointer-events-none absolute -right-1.5 -top-2 z-10 drop-shadow-sm"
+        >
+          <svg
+            viewBox="0 0 24 18"
+            aria-hidden
+            className="size-4"
+            fill="#FBBF24"
+          >
+            <path d="M3 16 L1.5 6.5 L6.5 10 L12 3 L17.5 10 L22.5 6.5 L21 16 Z" />
+            <circle cx="1.5" cy="5.5" r="1.5" />
+            <circle cx="12" cy="2"   r="1.7" />
+            <circle cx="22.5" cy="5.5" r="1.5" />
+          </svg>
+        </span>
       )}
-    >
+
+      <div className="flex h-12 overflow-hidden rounded-xl shadow-sm">
       {/* LEFT — internal navigation (when internalHref set) OR open public sale tab */}
       <button
         type="button"
@@ -541,6 +601,59 @@ function ShareLinkSplitButton({
           className="size-5 transition-transform group-hover:scale-110"
         />
       </button>
+      </div>
     </div>
+  )
+}
+
+/** Sale Page on/off toggle — labelled switch. ON = property visible on the
+ *  public sale page with full details; OFF = hidden from customers.
+ *  Currently UI-only state; add `showOnSalePage` to Property model + mutation
+ *  to make it persistent.
+ */
+function SalePageToggle({
+  on,
+  disabled,
+  onChange,
+}: {
+  on: boolean
+  disabled?: boolean
+  onChange: (next: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={(e) => {
+        // Guard against accidental parent click-handlers (Card hover, etc.)
+        e.preventDefault()
+        e.stopPropagation()
+        onChange(!on)
+      }}
+      className={cn(
+        'relative z-10 inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-wait disabled:opacity-60',
+        on
+          ? 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200 hover:bg-emerald-100'
+          : 'bg-gray-100 text-gray-600 ring-1 ring-inset ring-gray-200 hover:bg-gray-200',
+      )}
+      title={on ? 'แสดงบนหน้า Sale Page' : 'ซ่อนจากหน้า Sale Page'}
+      aria-pressed={on}
+    >
+      {/* Mini switch track */}
+      <span
+        className={cn(
+          'relative inline-flex h-4 w-7 items-center rounded-full transition-colors',
+          on ? 'bg-emerald-500' : 'bg-gray-300',
+        )}
+      >
+        <span
+          className={cn(
+            'inline-block size-3 rounded-full bg-white shadow-sm transition-transform',
+            on ? 'translate-x-3.5' : 'translate-x-0.5',
+          )}
+        />
+      </span>
+      Sale Page {on ? 'On' : 'Off'}
+    </button>
   )
 }

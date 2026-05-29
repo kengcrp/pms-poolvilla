@@ -21,6 +21,26 @@ async function assertPropertyOwn(propertyId: string, ownerId: string) {
 }
 
 export const variantRouter = router({
+  /**
+   * Lightweight lookup for components that need just enough variant metadata
+   * to open the weekly-pricing modal (calendar's "no pricing yet" prompt).
+   */
+  summary: ownerProcedure
+    .input(z.object({ variantId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const v = await assertVariantOwn(input.variantId, ctx.ownerId)
+      const nameTh = ((v.name as { th?: string } | null)?.th ?? `${v.bedrooms} ห้องนอน`)
+      return {
+        id: v.id,
+        name: nameTh,
+        maxGuests: v.maxGuests,
+        isDefault: v.isDefault,
+        propertyId: v.propertyId,
+        partnerListing: v.property.partnerListing,
+        propertyName: ((v.property.name as { th?: string } | null)?.th ?? v.property.code),
+      }
+    }),
+
   create: ownerProcedure.input(variantCreateSchema).mutation(async ({ ctx, input }) => {
     await assertPropertyOwn(input.propertyId, ctx.ownerId)
     const count = await prisma.propertyVariant.count({ where: { propertyId: input.propertyId } })

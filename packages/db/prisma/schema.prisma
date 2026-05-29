@@ -255,6 +255,9 @@ model Property {
   reviewStatus PropertyReviewStatus @default(PENDING)
   pricingMode  PriceDisplayMode     @default(SHOW_SELL)
   isActive     Boolean              @default(true)
+  /// Owner-controlled toggle — when false, the property is hidden from the
+  /// public Sale Page (/s/[slug]) regardless of isActive / reviewStatus.
+  showOnSalePage Boolean            @default(true)
 
   // Top-level basics (also at variant level for split rooms)
   totalBedrooms  Int
@@ -360,6 +363,10 @@ model VariantCalendar {
   /// strikethrough original alongside a DISCOUNT promo price. Null for normal
   /// overrides where no comparison is needed.
   originalPrice      Decimal?           @db.Decimal(10, 2)
+  /// Same as `originalPrice` but for the agent / OTA price. Captured when the
+  /// owner transitions a day into the DISCOUNT tag so the agent-mode calendar
+  /// can render strikethrough on the previous agent price too.
+  originalAgentPrice Decimal?           @db.Decimal(10, 2)
   priceType          PriceOverrideType?
   note               String?            @db.Text
   bookingId          String?

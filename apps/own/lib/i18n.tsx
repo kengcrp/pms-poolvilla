@@ -22,6 +22,8 @@ const dict: Dict = {
   // Sidebar groups
   'menu.group.manage':     { th: 'จัดการข้อมูล',     en: 'Manage Data',   zh: '数据管理' },
   'menu.group.reports':    { th: 'รายงาน',          en: 'Reports',       zh: '报告' },
+  'menu.group.salePage':   { th: 'เซลเพจ',          en: 'Sale Page',     zh: '销售页' },
+  'menu.group.settings':   { th: 'ตั้งค่าทั่วไป',     en: 'General Settings', zh: '通用设置' },
   'menu.group.other':      { th: 'อื่นๆ',           en: 'Other',         zh: '其他' },
 
   // Sidebar items — Manage
@@ -37,8 +39,18 @@ const dict: Dict = {
   // Reports
   'menu.dashboard':        { th: 'แดชบอร์ด',        en: 'Dashboard',     zh: '仪表板' },
   'menu.transactions':     { th: 'ประวัติการทำรายการ', en: 'Transactions', zh: '交易记录' },
+  // Sale Page
+  'menu.salePageBookings':  { th: 'ตรวจสอบการจอง',     en: 'Check Bookings',   zh: '查看预订' },
+  'menu.salePageCustomers': { th: 'ข้อมูลของลูกค้า',    en: 'Customer Info',    zh: '客户信息' },
+  'menu.salePageVideos':    { th: 'อัพโหลดวิดีโอที่พัก', en: 'Upload Videos',    zh: '上传视频' },
+  'menu.salePageMain':      { th: 'ยืน Sale Page',     en: 'Sale Page',        zh: '销售页' },
+  // Settings
+  'menu.settings':               { th: 'ตั้งค่าทั่วไป',     en: 'General Settings', zh: '通用设置' },
+  'menu.settingsTheme':          { th: 'ธีม Sale Page',     en: 'Sale Page Theme',  zh: '销售页主题' },
+  'menu.settingsPayoutChannels': { th: 'ช่องทางการรับเงิน',  en: 'Payout Channels',  zh: '收款渠道' },
   // Other
-  'menu.payoutChannels':   { th: 'ช่องทางรับเงิน',   en: 'Payout Channels', zh: '收款渠道' },
+  'menu.manual':           { th: 'คู่มือการใช้งาน',   en: 'User Manual',    zh: '用户手册' },
+  'menu.premium':          { th: 'แพ็กเกจ Premium',  en: 'Premium Package', zh: '高级套餐' },
 
   // Shell / header
   'shell.openMenu':        { th: 'เปิดเมนู',        en: 'Open menu',     zh: '打开菜单' },

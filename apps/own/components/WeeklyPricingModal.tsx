@@ -94,8 +94,10 @@ export function WeeklyPricingModal({
           agentPrice: partnerListing ? (r.agentPrice || null) : null,
           minStay: r.minStay,
           splitOpen: r.splitOpen,
-          includedGuests: r.includedGuests && r.includedGuests > 0 ? r.includedGuests : null,
-          extraGuestFee: r.extraGuestFee > 0 ? r.extraGuestFee : null,
+          // UI no longer exposes these — mirror maxGuests into includedGuests
+          // (so the base price covers all allowed guests) and drop the extra-guest fee.
+          includedGuests: maxGuests,
+          extraGuestFee: null,
         })),
       }),
       maxGuests !== initialMaxGuests
@@ -128,51 +130,25 @@ export function WeeklyPricingModal({
           <div className="flex justify-center py-8 text-sm text-gray-500">กำลังโหลด...</div>
         ) : (
           <div className="space-y-5">
-            {/* Guest capacity & extra-guest pricing
-                - รองรับสูงสุด = absolute max (PropertyVariant.maxGuests)
-                - รวมในราคา   = guests included in base price
-                - ค่าท่านเพิ่ม = fee per guest above รวมในราคา (all written to every DOW) */}
+            {/* Guest capacity — only "จำนวนท่าน" remains. "รวมในราคา" and
+                "ค่าท่านเพิ่ม" were removed per design; on save we mirror
+                maxGuests into includedGuests so backend math stays consistent. */}
             <div className="rounded-xl border border-gray-200 bg-white p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
                 <Icon name="users" className="size-3.5 text-gray-500" />
                 จำนวนผู้เข้าพัก
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div>
-                  <Label htmlFor="guests-count">รองรับสูงสุด (ท่าน)</Label>
-                  <Input
-                    id="guests-count"
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={maxGuests}
-                    onChange={(e) => setMaxGuests(Math.max(1, Number(e.target.value || 1)))}
-                  />
-                  <p className="mt-1 text-[10.5px] text-gray-500">เพดานสูงสุดที่บ้านรับได้</p>
-                </div>
-                <div>
-                  <Label>รวมในราคา (ท่าน)</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={maxGuests}
-                    value={rows[0]?.includedGuests ?? maxGuests}
-                    onChange={(e) => {
-                      const inc = Math.max(1, Number(e.target.value || 1))
-                      setRows((rs) => rs.map((r) => ({ ...r, includedGuests: inc })))
-                    }}
-                  />
-                  <p className="mt-1 text-[10.5px] text-gray-500">จำนวนท่านที่ราคาขายครอบคลุม</p>
-                </div>
-                <div>
-                  <Label>ค่าท่านเพิ่ม / ท่าน (฿)</Label>
-                  <NumberInput
-                    value={rows[0]?.extraGuestFee ?? 0}
-                    placeholder="0"
-                    onChange={(v) => setRows((rs) => rs.map((r) => ({ ...r, extraGuestFee: v })))}
-                  />
-                  <p className="mt-1 text-[10.5px] text-gray-500">คิดเพิ่มเฉพาะท่านที่เกิน "รวมในราคา"</p>
-                </div>
+              <div className="max-w-xs">
+                <Label htmlFor="guests-count">จำนวนท่าน</Label>
+                <Input
+                  id="guests-count"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={maxGuests}
+                  onChange={(e) => setMaxGuests(Math.max(1, Number(e.target.value || 1)))}
+                />
+                <p className="mt-1 text-[10.5px] text-gray-500">เพดานสูงสุดที่บ้านรับได้</p>
               </div>
             </div>
 
