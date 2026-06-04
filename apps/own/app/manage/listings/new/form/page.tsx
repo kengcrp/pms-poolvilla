@@ -121,6 +121,9 @@ export default function NewListingPage() {
     defaultVariantMaxGuests: 0,
     /** Show "ราคาส่ง Agent" rows in the pricing / calendar pages (was on /edit before) */
     partnerListing: false,
+    /** Unit for partner / agent price — 'THB' (baht) or 'PERCENT' (% off sell price).
+     *  Only meaningful when partnerListing is on. */
+    agentPriceUnit: 'THB' as 'THB' | 'PERCENT',
   })
   /** Split-room state — when enabled, after property creation we also create one
    *  PropertyVariant per row via the variant.create endpoint.
@@ -275,7 +278,7 @@ export default function NewListingPage() {
         )
       }
       // Onboarding flow — show the amenities step before the full edit page
-      router.push(`/manage/listings/${created.id}/amenities`)
+      router.push(`/manage/listings/${created.id}/details`)
       router.refresh()
     },
     onError: (e) => {
@@ -287,15 +290,20 @@ export default function NewListingPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    if (!form.nameTh.trim()) return setError('กรุณาใส่ชื่อที่พัก')
+    // TH no longer required — accept any non-empty language combo.
+    if (!form.nameTh.trim() && !form.nameEn.trim()) {
+      return setError('กรุณาใส่ชื่อที่พักอย่างน้อย 1 ภาษา')
+    }
     if (!form.type) return setError('กรุณาเลือกประเภทที่พัก')
     if (form.totalBedrooms < 1) return setError('กรุณาระบุจำนวนห้องนอน')
     if (form.totalBathrooms < 1) return setError('กรุณาระบุจำนวนห้องน้ำ')
     if (form.defaultVariantMaxGuests < 1) return setError('กรุณาระบุจำนวนผู้เข้าพัก')
     setSubmitting(true)
     create.mutate({
+      // Only include language fields the user actually filled in — the Zod
+      // schema's refinement requires at least one, validated by the form above.
       name: {
-        th: form.nameTh.trim(),
+        ...(form.nameTh.trim() && { th: form.nameTh.trim() }),
         ...(form.nameEn.trim() && { en: form.nameEn.trim() }),
       },
       type: form.type,
@@ -303,6 +311,8 @@ export default function NewListingPage() {
       totalBathrooms: form.totalBathrooms,
       defaultVariantMaxGuests: form.defaultVariantMaxGuests,
       partnerListing: form.partnerListing,
+      // Only meaningful when partnerListing is on, but harmless to always send.
+      agentPriceUnit: form.agentPriceUnit,
     })
   }
 
@@ -674,6 +684,55 @@ export default function NewListingPage() {
                   <strong>ปรับราคา</strong> และ <strong>ปฏิทิน</strong> —
                   ช่วยให้คุณตั้งราคาแยกสำหรับการขายผ่านพาทเนอร์ (OTA / Agent)
                 </p>
+
+                {/* Unit selector — only meaningful when partner listing is on.
+                    Lets the owner pick whether agent price is absolute baht or
+                    a % discount off the sell price. Clicking inside this row
+                    must NOT toggle the outer checkbox; preventDefault handles that. */}
+                {form.partnerListing && (
+                  <div
+                    className="mt-3 flex flex-wrap items-center gap-2"
+                    onClick={(e) => e.preventDefault()}
+                  >
+                    <span className="text-xs font-medium text-gray-600">
+                      หน่วยราคาส่ง:
+                    </span>
+                    <div className="inline-flex rounded-full bg-gray-100 p-0.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setForm({ ...form, agentPriceUnit: 'THB' })
+                        }}
+                        className={cn(
+                          'rounded-full px-3 py-1 text-xs font-semibold transition-colors',
+                          form.agentPriceUnit === 'THB'
+                            ? 'bg-white text-brand-700 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700',
+                        )}
+                      >
+                        ราคาส่ง (฿)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setForm({ ...form, agentPriceUnit: 'PERCENT' })
+                        }}
+                        className={cn(
+                          'rounded-full px-3 py-1 text-xs font-semibold transition-colors',
+                          form.agentPriceUnit === 'PERCENT'
+                            ? 'bg-white text-brand-700 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700',
+                        )}
+                      >
+                        เปอร์เซ็นต์ (%)
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </label>
           </div>

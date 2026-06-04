@@ -270,7 +270,7 @@ export default function ListingPhotosPage() {
         </p>
       </div>
 
-      <WizardStepper propertyId={id} current={5} />
+      <WizardStepper propertyId={id} current={7} />
 
       {/* Grid: existing photos + upload tile (if under cap) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
@@ -435,7 +435,7 @@ export default function ListingPhotosPage() {
             <Button
               variant="secondary"
               type="button"
-              onClick={() => persistAndGoto(`/manage/listings/${id}/policies`)}
+              onClick={() => persistAndGoto(`/manage/listings/${id}/area`)}
               disabled={uploading}
             >
               ข้าม
@@ -448,7 +448,7 @@ export default function ListingPhotosPage() {
             </div>
             <Button
               type="button"
-              onClick={() => persistAndGoto(`/manage/listings/${id}/policies`)}
+              onClick={() => persistAndGoto(`/manage/listings/${id}/area`)}
               disabled={uploading}
             >
               {uploading ? 'กำลังอัพโหลด...' : 'ดำเนินการต่อ'}

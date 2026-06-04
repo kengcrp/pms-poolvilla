@@ -14,6 +14,7 @@ interface Props {
 }
 
 const DOW_FULL = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'] as const
+const DOW_SHORT = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'] as const
 
 /**
  * Layout 2 — Days as rows, variants (เหมาหลัง + แบ่งห้องนอน) as columns.
@@ -106,36 +107,31 @@ export function PriceTableVertical({ propertyId, onCellClick, priceMode: control
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-gray-200">
-                {/* Month navigator — chevrons + label + วันนี้, no background pill */}
-                <th colSpan={2} className="border-r border-gray-200 px-2 py-3">
-                  <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1 py-0.5 shadow-sm">
-                    <button
-                      type="button"
-                      onClick={() => nav(-1)}
-                      className="flex size-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:text-gray-700"
-                      aria-label="เดือนก่อน"
-                    >
-                      <Icon name="chevronLeft" className="size-3.5" />
-                    </button>
-                    <span className="whitespace-nowrap px-2 text-sm font-bold tabular-nums text-gray-900">
-                      {formatMonthLabel(view.year, view.month0)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => nav(1)}
-                      className="flex size-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:text-gray-700"
-                      aria-label="เดือนถัดไป"
-                    >
-                      <Icon name="chevronRight" className="size-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setView(today)}
-                      className="whitespace-nowrap px-2.5 py-1 text-xs font-semibold text-brand-700 transition-colors hover:text-brand-800"
-                      title="กลับไปเดือนปัจจุบัน"
-                    >
-                      วันนี้
-                    </button>
+                {/* Month navigator — chevrons + label as a pill only. "วันนี้"
+                    moved OUTSIDE this card (rendered below the table) per design. */}
+                <th colSpan={2} className="border-r border-gray-200 px-1 py-2 sm:px-2 sm:py-3">
+                  <div className="flex justify-center">
+                    <div className="inline-flex items-center gap-0.5 rounded-full border border-gray-200 bg-white px-1 py-0.5 shadow-sm">
+                      <button
+                        type="button"
+                        onClick={() => nav(-1)}
+                        className="flex size-6 items-center justify-center rounded-full text-gray-500 transition-colors hover:text-gray-700 sm:size-7"
+                        aria-label="เดือนก่อน"
+                      >
+                        <Icon name="chevronLeft" className="size-3" />
+                      </button>
+                      <span className="whitespace-nowrap px-1 text-xs font-bold tabular-nums text-gray-900 sm:px-2 sm:text-sm">
+                        {formatMonthLabel(view.year, view.month0)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => nav(1)}
+                        className="flex size-6 items-center justify-center rounded-full text-gray-500 transition-colors hover:text-gray-700 sm:size-7"
+                        aria-label="เดือนถัดไป"
+                      >
+                        <Icon name="chevronRight" className="size-3" />
+                      </button>
+                    </div>
                   </div>
                 </th>
                 {variants.map((v) => {
@@ -181,7 +177,7 @@ export function PriceTableVertical({ propertyId, onCellClick, priceMode: control
                   >
                     <td
                       className={cn(
-                        'w-12 border-r border-gray-200 px-2 py-2 text-center text-sm',
+                        'w-8 border-r border-gray-200 px-1 py-2 text-center text-xs sm:w-12 sm:px-2 sm:text-sm',
                         isToday ? 'font-semibold text-brand-700' : 'text-gray-600',
                       )}
                     >
@@ -189,12 +185,14 @@ export function PriceTableVertical({ propertyId, onCellClick, priceMode: control
                     </td>
                     <td
                       className={cn(
-                        'w-28 border-r border-gray-200 px-3 py-2 text-sm',
+                        'w-12 border-r border-gray-200 px-1.5 py-2 text-xs sm:w-28 sm:px-3 sm:text-sm',
                         isWeekend && 'font-medium',
                         isToday ? 'text-brand-700' : 'text-gray-700',
                       )}
                     >
-                      {DOW_FULL[dow]}
+                      {/* Phone: 2-letter Thai abbreviation; Tablet+: full word. */}
+                      <span className="sm:hidden">{DOW_SHORT[dow]}</span>
+                      <span className="hidden sm:inline">{DOW_FULL[dow]}</span>
                     </td>
                     {variants.map((v) => {
                       const day = v.days.find((x) => ymd(new Date(x.date)) === key)
@@ -321,6 +319,19 @@ export function PriceTableVertical({ propertyId, onCellClick, priceMode: control
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* "เลื่อนบนสุด" — outside the table card; tapping resets to the current
+          month so the user can jump back to "today" from anywhere in the year. */}
+      <div className="mt-2 flex justify-center">
+        <button
+          type="button"
+          onClick={() => setView(today)}
+          className="whitespace-nowrap px-3 py-1 text-xs font-semibold text-brand-700 transition-colors hover:text-brand-800"
+          title="กลับไปเดือนปัจจุบัน"
+        >
+          เลื่อนบนสุด
+        </button>
       </div>
     </div>
   )

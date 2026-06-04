@@ -377,8 +377,9 @@ export function MiniCalendar({
         </div>
       )}
 
-      {/* Month nav — chevrons + label + วันนี้, no background pill (flat layout). */}
-      <div className="mb-3 flex items-center justify-center">
+      {/* Month nav — chevrons + label (รด pill); "วันนี้" sits on its own row
+          below so the header stays balanced + symmetric. */}
+      <div className="mb-2 flex items-center justify-center">
         <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1 py-0.5 shadow-sm">
           <button
             type="button"
@@ -399,15 +400,17 @@ export function MiniCalendar({
           >
             <Icon name="chevronRight" className="size-3.5" />
           </button>
-          <button
-            type="button"
-            onClick={() => setView(today)}
-            className="whitespace-nowrap px-2.5 py-1 text-xs font-semibold text-brand-700 transition-colors hover:text-brand-800"
-            title="กลับไปเดือนปัจจุบัน"
-          >
-            วันนี้
-          </button>
         </div>
+      </div>
+      <div className="mb-3 flex justify-center">
+        <button
+          type="button"
+          onClick={() => setView(today)}
+          className="whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold text-brand-700 transition-colors hover:text-brand-800"
+          title="กลับไปเดือนปัจจุบัน"
+        >
+          วันนี้
+        </button>
       </div>
 
       {/* Calendar table — table-like layout with bordered cells */}

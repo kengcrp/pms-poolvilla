@@ -4,12 +4,20 @@ import { z } from 'zod'
 export const PropertyTypeEnum = z.string().min(1)
 export const ReviewStatusEnum = z.enum(['PENDING', 'ACTIVE', 'INACTIVE', 'REJECTED'])
 export const PricingModeEnum = z.enum(['SHOW_SELL', 'SHOW_WHOLESALE', 'HIDE'])
+/** Unit for agent / partner pricing — absolute baht vs. percentage off the sell price. */
+export const AgentPriceUnitEnum = z.enum(['THB', 'PERCENT'])
 
-export const localizedString = z.object({
-  th: z.string().min(1, 'จำเป็นต้องระบุภาษาไทย'),
-  en: z.string().optional(),
-  zh: z.string().optional(),
-})
+// Name is multilingual; Thai is no longer required, but at least ONE language
+// must be provided so we never end up with a fully-blank Property.name.
+export const localizedString = z
+  .object({
+    th: z.string().optional(),
+    en: z.string().optional(),
+    zh: z.string().optional(),
+  })
+  .refine((v) => !!(v.th?.trim() || v.en?.trim() || v.zh?.trim()), {
+    message: 'กรุณาระบุชื่อที่พักอย่างน้อย 1 ภาษา',
+  })
 
 export const propertyCreateSchema = z.object({
   name: localizedString,
@@ -20,6 +28,8 @@ export const propertyCreateSchema = z.object({
   contactInfo: z.string().optional(),
   /** Show "ราคาส่ง Agent" rows in pricing / calendar — set during onboarding */
   partnerListing: z.boolean().optional(),
+  /** Unit for partner / agent pricing (THB vs % off sell). Default THB. */
+  agentPriceUnit: AgentPriceUnitEnum.optional(),
   // Initial default variant (full villa)
   defaultVariantName: z.string().min(1).optional(),
   defaultVariantMaxGuests: z.number().int().min(1).max(100),
@@ -33,6 +43,7 @@ export const propertyUpdateSchema = z.object({
   totalBathrooms: z.number().int().min(0).max(50).optional(),
   areaSqwa: z.number().nonnegative().nullable().optional(),
   partnerListing: z.boolean().optional(),
+  agentPriceUnit: AgentPriceUnitEnum.optional(),
   contactInfo: z.string().nullable().optional(),
   /** How far ahead (months) guests may book. null = use system default. */
   bookingWindowMonths: z.number().int().min(0).max(60).nullable().optional(),

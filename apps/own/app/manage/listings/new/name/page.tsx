@@ -58,8 +58,10 @@ export default function NewListingNamePage() {
   }, [nameTh, nameEn, hydrated])
 
   function handleContinue() {
-    if (!nameTh.trim()) {
-      setError('กรุณาใส่ชื่อที่พัก (ภาษาไทย)')
+    // TH is no longer required — accept any language. Block only when ALL
+    // language fields are empty (DB schema requires at least one).
+    if (!nameTh.trim() && !nameEn.trim()) {
+      setError('กรุณาใส่ชื่อที่พักอย่างน้อย 1 ภาษา')
       return
     }
     setError(null)
@@ -93,9 +95,7 @@ export default function NewListingNamePage() {
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <Label required htmlFor="newName-th">
-              ชื่อที่พัก (ภาษาไทย)
-            </Label>
+            <Label htmlFor="newName-th">ชื่อที่พัก (ภาษาไทย)</Label>
             <Input
               id="newName-th"
               value={nameTh}

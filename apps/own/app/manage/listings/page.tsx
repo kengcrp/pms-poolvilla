@@ -19,10 +19,10 @@ export default function ListingsPage() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="mb-6 flex items-end justify-between gap-4">
+      <div className="mb-5 flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">ลิสติ้งที่พัก</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <h1 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">ลิสติ้งที่พัก</h1>
+          <p className="mt-0.5 text-xs text-gray-600 sm:mt-1 sm:text-sm">
             {isPending ? 'กำลังโหลด...' : `ที่พักทั้งหมด ${properties.length} รายการ`}
           </p>
         </div>
@@ -58,7 +58,9 @@ export default function ListingsPage() {
         </Card>
       )}
 
-      <div className="mb-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+      {/* 2 columns even on phone — owner sees more properties per screen.
+          Cards adapt: tighter padding, smaller name, share rows still readable. */}
+      <div className="mb-6 grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-4">
         {properties.map((p) => {
           const status = reviewStatusLabel[p.reviewStatus] ?? reviewStatusLabel.PENDING!
           return <PropertyCard key={p.id} p={p} slug={slug} status={status} />
@@ -152,8 +154,8 @@ function PropertyCard({ p, slug, status }: PropertyCardProps) {
 
   return (
     <Card hover className="overflow-hidden">
-      {/* ── Cover image — compact landscape (aspect 16/8 — shorter than before) ───── */}
-      <div className="relative aspect-[16/8] bg-gradient-to-br from-gray-100 to-gray-200">
+      {/* ── Cover image — even shorter on mobile (16/6) to fit more above the fold ── */}
+      <div className="relative aspect-[16/6] bg-gradient-to-br from-gray-100 to-gray-200 sm:aspect-[16/8]">
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={cover} alt={name} className="size-full object-cover" />
@@ -164,38 +166,39 @@ function PropertyCard({ p, slug, status }: PropertyCardProps) {
         )}
         {/* Location chip — top-left over image */}
         {p.location?.location && (
-          <div className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur">
-            <Icon name="pin" className="size-3 text-brand-600" />
-            {p.location.location.name}
+          <div className="absolute left-2 top-2 inline-flex max-w-[60%] items-center gap-1 truncate rounded-full bg-white/95 px-2 py-0.5 text-[10px] font-medium text-gray-700 shadow-sm backdrop-blur sm:left-3 sm:top-3 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-xs">
+            <Icon name="pin" className="size-2.5 shrink-0 text-brand-600 sm:size-3" />
+            <span className="truncate">{p.location.location.name}</span>
           </div>
         )}
         {/* Action buttons — top-right over image. Edit (primary) + trash icon (destructive).
             Both are pill-shaped with backdrop blur so they sit cleanly over any cover. */}
-        <div className="absolute right-3 top-3 flex items-center gap-1.5">
+        <div className="absolute right-2 top-2 flex items-center gap-1.5 sm:right-3 sm:top-3">
           <Link
             href={`/manage/listings/${p.id}/edit`}
-            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-gray-800 shadow-md ring-1 ring-inset ring-gray-200 backdrop-blur transition-all hover:bg-brand-600 hover:text-white hover:ring-brand-600"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-gray-800 shadow-md ring-1 ring-inset ring-gray-200 backdrop-blur transition-all hover:bg-brand-600 hover:text-white hover:ring-brand-600 sm:px-4 sm:py-2 sm:text-sm"
             title="แก้ไขข้อมูลที่พัก"
           >
-            <Icon name="edit" className="size-4" />
-            แก้ไข
+            <Icon name="edit" className="size-3.5 sm:size-4" />
+            {/* Hide "แก้ไข" text on tight cards (phone 2-col) — icon is enough. */}
+            <span className="hidden sm:inline">แก้ไข</span>
           </Link>
           <button
             type="button"
             onClick={() => setConfirmOpen(true)}
             disabled={remove.isPending}
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/95 text-red-500 shadow-md ring-1 ring-inset ring-gray-200 backdrop-blur transition-all hover:bg-red-500 hover:text-white hover:ring-red-500 disabled:opacity-50"
+            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-white/95 text-red-500 shadow-md ring-1 ring-inset ring-gray-200 backdrop-blur transition-all hover:bg-red-500 hover:text-white hover:ring-red-500 disabled:opacity-50 sm:size-9"
             title="ลบที่พักนี้"
             aria-label="ลบที่พัก"
           >
-            <Icon name="trash" className="size-4" />
+            <Icon name="trash" className="size-3.5 sm:size-4" />
           </button>
         </div>
       </div>
 
-      <div className="p-4">
+      <div className="p-3 sm:p-4">
         {/* ── Header: name + status under the name ────────────────── */}
-        <h3 className="truncate text-lg font-bold tracking-tight text-gray-900">
+        <h3 className="truncate text-base font-bold tracking-tight text-gray-900 sm:text-lg">
           {name}
         </h3>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
@@ -320,21 +323,24 @@ function SaleLinkRow({
   return (
     // Two distinct sibling buttons side-by-side — the main label "open in new tab" + a copy
     // companion. Both have clear button styling so the row reads as actionable, not just text.
-    <div className={cn('flex items-stretch gap-1.5', disabled && 'cursor-not-allowed opacity-50')}>
+    <div
+      className={cn(
+        'flex items-stretch',
+        disabled && 'cursor-not-allowed opacity-50',
+      )}
+    >
       <button
         type="button"
         onClick={handleOpen}
         disabled={disabled}
         title={url ?? 'ยังไม่ได้ตั้ง sale slug'}
         className={cn(
-          'group flex flex-1 items-center gap-2 rounded-lg border border-brand-200 bg-brand-50/50 px-3 py-2 text-left text-sm font-semibold text-brand-700 shadow-xs transition-all',
-          !disabled && 'hover:-translate-y-px hover:border-brand-400 hover:bg-brand-100 hover:shadow-sm active:translate-y-0 active:shadow-xs',
+          'group flex flex-1 items-center justify-start rounded-lg bg-brand-600 px-3 py-2 text-left text-sm font-semibold text-white shadow-sm transition-colors',
+          !disabled && 'hover:bg-brand-700',
           disabled && 'cursor-not-allowed',
         )}
       >
-        <Icon name={icon} className="size-4 text-brand-600" />
-        <span className="flex-1 truncate">{label}</span>
-        <Icon name="external" className="size-3.5 text-brand-400 transition-transform group-hover:translate-x-0.5" />
+        <span className="truncate">{label}</span>
       </button>
       <button
         type="button"
@@ -342,10 +348,10 @@ function SaleLinkRow({
         disabled={disabled}
         title={copied ? '✓ คัดลอกแล้ว' : 'คัดลอกลิงก์'}
         className={cn(
-          'flex size-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-xs transition-all',
-          !disabled && 'hover:-translate-y-px hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 hover:shadow-sm active:translate-y-0 active:shadow-xs',
+          'flex w-10 shrink-0 items-center justify-center rounded-lg bg-white text-brand-600 shadow-sm ring-1 ring-inset ring-gray-200 transition-all',
+          !disabled && 'hover:bg-gray-50 hover:text-brand-700 hover:shadow-md',
           disabled && 'cursor-not-allowed',
-          copied && 'border-emerald-300 bg-emerald-50 text-emerald-600',
+          copied && 'text-emerald-600 ring-emerald-300',
         )}
       >
         <Icon name={copied ? 'check' : 'copy'} className="size-4" />
@@ -448,6 +454,7 @@ interface ShareLinkToolbarProps {
 }
 
 function ShareLinkToolbar({ slug }: ShareLinkToolbarProps) {
+  const [mobileOpen, setMobileOpen] = useState(false)
   const buttons: {
     key: string
     label: string
@@ -464,18 +471,42 @@ function ShareLinkToolbar({ slug }: ShareLinkToolbarProps) {
     { key: 'default',   label: 'ที่พัก SalePage', query: '',                accent: 'accent', internalHref: slug ? `/s/${slug}` : '/s/demo', premium: true },
   ]
   return (
-    <div className="mb-5 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-      {buttons.map((b) => (
-        <ShareLinkSplitButton
-          key={b.key}
-          label={b.label}
-          slug={slug}
-          query={b.query}
-          accent={b.accent}
-          internalHref={b.internalHref}
-          premium={b.premium}
+    <div className="mb-5">
+      {/* Mobile collapse toggle — saves vertical space; tap to expand. */}
+      <button
+        type="button"
+        onClick={() => setMobileOpen((v) => !v)}
+        className="flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm sm:hidden"
+      >
+        <span className="inline-flex items-center gap-2">
+          <Icon name="copy" className="size-4 text-brand-600" />
+          แชร์ลิงก์ที่พัก
+        </span>
+        <Icon
+          name={mobileOpen ? 'chevronUp' : 'chevronDown'}
+          className="size-4 text-gray-400"
         />
-      ))}
+      </button>
+
+      {/* Buttons grid — always visible on sm+; on phone only when expanded. */}
+      <div
+        className={cn(
+          'grid grid-cols-1 gap-2 sm:mt-0 sm:grid-cols-2 sm:grid lg:grid-cols-4',
+          mobileOpen ? 'mt-2 grid' : 'hidden sm:grid',
+        )}
+      >
+        {buttons.map((b) => (
+          <ShareLinkSplitButton
+            key={b.key}
+            label={b.label}
+            slug={slug}
+            query={b.query}
+            accent={b.accent}
+            internalHref={b.internalHref}
+            premium={b.premium}
+          />
+        ))}
+      </div>
     </div>
   )
 }

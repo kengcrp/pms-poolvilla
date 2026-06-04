@@ -40,7 +40,7 @@ export default function ListingAreaPage() {
   return (
     <div className="mx-auto max-w-3xl pb-24">
       <Link
-        href={`/manage/listings/${id}/policies`}
+        href={`/manage/listings/${id}/photos`}
         className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 transition-colors hover:text-brand-700"
       >
         <Icon name="chevronLeft" className="size-3.5" />
@@ -51,7 +51,7 @@ export default function ListingAreaPage() {
         ข้อมูลพื้นที่
       </h1>
 
-      <WizardStepper propertyId={id} current={7} />
+      <WizardStepper propertyId={id} current={8} />
 
       <LocationSection propertyId={id} />
 
@@ -96,7 +96,7 @@ export default function ListingAreaPage() {
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-gray-200 bg-white/95 backdrop-blur">
         <div className="px-4 py-3 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
-          <Link href={`/manage/listings/${id}/policies`}>
+          <Link href={`/manage/listings/${id}/photos`}>
             <Button variant="secondary" type="button">
               <Icon name="chevronLeft" className="size-3.5" />
               ย้อนกลับ
@@ -106,13 +106,13 @@ export default function ListingAreaPage() {
             <Button
               variant="secondary"
               type="button"
-              onClick={() => router.push(`/manage/listings/${id}/details`)}
+              onClick={() => router.push(`/manage/listings/${id}/ical`)}
             >
               ข้าม
             </Button>
             <Button
               type="button"
-              onClick={() => router.push(`/manage/listings/${id}/details`)}
+              onClick={() => router.push(`/manage/listings/${id}/ical`)}
             >
               ดำเนินการต่อ
               <Icon name="chevronRight" className="size-3.5" />

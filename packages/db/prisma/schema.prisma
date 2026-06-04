@@ -264,6 +264,9 @@ model Property {
   totalBathrooms Int
   areaSqwa       Decimal? @db.Decimal(8, 2) // ตารางวา (Thai unit)
   partnerListing Boolean  @default(false) // "ต้องการลงประกาศพาทเนอร์"
+  /// Unit for agent / partner pricing — 'THB' = absolute baht, 'PERCENT' = % off the sell price.
+  /// Only meaningful when partnerListing is true. Defaults to 'THB' so legacy rows stay correct.
+  agentPriceUnit String   @default("THB")
   contactInfo    String? // "name 0987654321"
   /// How far in advance guests can book — null = use system default (vacant per weekly settings).
   /// Common values: 3, 6, 9, 12, 24 (months). 0 = closed.

@@ -67,7 +67,7 @@ export default function ListingPoliciesPage() {
   return (
     <div className="mx-auto max-w-3xl pb-24">
       <Link
-        href={`/manage/listings/${id}/photos`}
+        href={`/manage/listings/${id}/details`}
         className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 transition-colors hover:text-brand-700"
       >
         <Icon name="chevronLeft" className="size-3.5" />
@@ -78,7 +78,7 @@ export default function ListingPoliciesPage() {
         กรอกนโยบายเสริมคนเข้าพัก
       </h1>
 
-      <WizardStepper propertyId={id} current={6} />
+      <WizardStepper propertyId={id} current={5} />
 
       {/* ─── Card: capacity ─────────────────────────────────────── */}
       <Card title="ความจุที่พัก" icon="users" desc="จำนวนผู้เข้าพักสูงสุดที่ที่พักนี้รองรับได้">
@@ -138,7 +138,7 @@ export default function ListingPoliciesPage() {
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-gray-200 bg-white/95 backdrop-blur">
         <div className="px-4 py-3 sm:px-6 lg:px-8">
           <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
-            <Link href={`/manage/listings/${id}/photos`}>
+            <Link href={`/manage/listings/${id}/details`}>
               <Button variant="secondary" type="button">
                 <Icon name="chevronLeft" className="size-3.5" />
                 ย้อนกลับ
@@ -148,13 +148,13 @@ export default function ListingPoliciesPage() {
               <Button
                 variant="secondary"
                 type="button"
-                onClick={() => persistAndGoto(`/manage/listings/${id}/area`)}
+                onClick={() => persistAndGoto(`/manage/listings/${id}/amenities`)}
               >
                 ข้าม
               </Button>
               <Button
                 type="button"
-                onClick={() => persistAndGoto(`/manage/listings/${id}/area`)}
+                onClick={() => persistAndGoto(`/manage/listings/${id}/amenities`)}
               >
                 ดำเนินการต่อ
                 <Icon name="chevronRight" className="size-3.5" />

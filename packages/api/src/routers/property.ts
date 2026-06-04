@@ -104,6 +104,7 @@ export const propertyRouter = router({
           areaSqwa: input.areaSqwa,
           contactInfo: input.contactInfo,
           partnerListing: input.partnerListing ?? false,
+          agentPriceUnit: input.agentPriceUnit ?? 'THB',
           reviewStatus: 'ACTIVE', // owner self-publish (no admin review in MVP)
           isActive: true,
         },

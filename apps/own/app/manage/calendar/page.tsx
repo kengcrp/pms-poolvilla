@@ -15,6 +15,7 @@ import { SplitCalendarPanel } from '@/components/SplitCalendarPanel'
 import { LayoutSwitcher, type Layout } from '@/components/LayoutSwitcher'
 import { PropertyHeaderRow } from '@/components/PropertyHeaderRow'
 import { PropertyPickerCard } from '@/components/PropertyPickerCard'
+import { MobilePropertySwitcher, type SwitcherProperty } from '@/components/MobilePropertySwitcher'
 import { useLocalStorageState } from '@/lib/use-local-storage-state'
 
 export default function CalendarPage() {
@@ -50,6 +51,30 @@ export default function CalendarPage() {
   }, [properties, pickedId])
   const pickedProperty = properties.find((p) => p.id === pickedId) ?? null
 
+  // Mobile-only: same single-property view that Layout 1 grid honours via
+  // MobilePropertySwitcher. We default to the first match in filteredProperties
+  // so search results are respected.
+  const [mobilePickedId, setMobilePickedId] = useState<string | null>(null)
+  useEffect(() => {
+    if (!mobilePickedId && filteredProperties[0]) setMobilePickedId(filteredProperties[0].id)
+  }, [filteredProperties, mobilePickedId])
+  // Map → MobilePropertySwitcher shape (lightweight fields only)
+  const switcherProps: SwitcherProperty[] = useMemo(
+    () =>
+      filteredProperties.map((p) => {
+        const defaultVariant = p.variants.find((v) => v.isDefault)
+        return {
+          id: p.id,
+          name: ((p.name as { th?: string } | null)?.th ?? p.code),
+          code: p.code,
+          cover: p.images[0]?.url ?? null,
+          guests: defaultVariant?.maxGuests ?? 0,
+          bedrooms: defaultVariant?.bedrooms ?? p.totalBedrooms ?? 0,
+        }
+      }),
+    [filteredProperties],
+  )
+
   return (
     <div className="mx-auto max-w-[110rem]">
       <PageHeader title="ปฏิทิน">
@@ -79,8 +104,21 @@ export default function CalendarPage() {
       {/* Layout 1 — card grid with cover image + mini calendars */}
       {layout === 1 && (
         <>
-          {/* Search bar — filters the grid by property name or code */}
-          <div className="mb-4 flex items-center gap-2">
+          {/* Mobile-only property switcher — pill at top, dropdown lists all
+              properties. Selecting one focuses the grid below to just that card. */}
+          {properties.length > 0 && (
+            <div className="mb-4">
+              <MobilePropertySwitcher
+                properties={switcherProps}
+                selectedId={mobilePickedId}
+                onSelect={setMobilePickedId}
+              />
+            </div>
+          )}
+
+          {/* Search bar — desktop/tablet only. On phone the MobilePropertySwitcher
+              dropdown above already lets the user jump to any property. */}
+          <div className="mb-4 hidden items-center gap-2 md:flex">
             <div className="relative max-w-md flex-1">
               <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-gray-400" />
               <Input
@@ -109,6 +147,9 @@ export default function CalendarPage() {
             const cover = p.images[0]?.url
             const defaultVariant = p.variants.find((v) => v.isDefault)
             if (!defaultVariant) return null
+            // Phone (< md): only render the property selected via the switcher.
+            // Tablet+: show every filtered property in the multi-col grid.
+            const hideOnPhone = p.id !== mobilePickedId
             const defaultVarName =
               (defaultVariant.name as { th?: string })?.th ?? `${defaultVariant.bedrooms} ห้องนอน`
             // Determine if ALL split variants are fully Locked across every weekly DOW
@@ -122,7 +163,13 @@ export default function CalendarPage() {
                 return w.length > 0 && w.every((row) => row.splitOpen === false)
               })
             return (
-              <div key={p.id} className="flex h-full flex-col">
+              <div
+                key={p.id}
+                className={cn(
+                  'flex h-full flex-col',
+                  hideOnPhone && 'hidden md:flex',
+                )}
+              >
                 {/* Split-room pill — opens a right-sliding panel for this property.
                     Always render the row (invisible placeholder when no split variants)
                     so card tops align across the grid. */}
@@ -136,7 +183,7 @@ export default function CalendarPage() {
                       }
                     />
                   ) : (
-                    <div className="invisible" aria-hidden>
+                    <div className="invisible hidden md:block" aria-hidden>
                       <SplitRoomBadge count={1} />
                     </div>
                   )}
@@ -254,15 +301,29 @@ export default function CalendarPage() {
         return (
           <div>
             <div className="mb-3 text-sm text-gray-500">ทั้งหมด {properties.length} รายการ</div>
+
+            {/* Mobile-only switcher — pill at top, dropdown to switch.
+                On desktop the vertical PropertyPickerCard handles switching. */}
+            <div className="mb-4">
+              <MobilePropertySwitcher
+                properties={switcherProps}
+                selectedId={pickedId}
+                onSelect={setPickedId}
+              />
+            </div>
+
             {/* items-start so the sticky picker doesn't get stretched to match the
                 right card height — required for `position: sticky` to actually pin
                 while the calendar table scrolls. */}
             <div className="flex items-start gap-4">
-              <PropertyPickerCard
-                properties={properties}
-                selectedId={pickedId}
-                onSelect={setPickedId}
-              />
+              {/* Desktop-only vertical thumbnail strip — hidden on phone/tablet. */}
+              <div className="hidden lg:block">
+                <PropertyPickerCard
+                  properties={properties}
+                  selectedId={pickedId}
+                  onSelect={setPickedId}
+                />
+              </div>
 
               <div className="min-w-0 flex-1">
                 <Card className="overflow-hidden">

@@ -396,7 +396,7 @@ export default function ListingAmenitiesPage() {
   return (
     <div className="mx-auto max-w-4xl pb-24">
       <Link
-        href="/manage/listings/new/form"
+        href={`/manage/listings/${id}/policies`}
         className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 transition-colors hover:text-brand-700"
       >
         <Icon name="chevronLeft" className="size-3.5" />
@@ -407,7 +407,7 @@ export default function ListingAmenitiesPage() {
         แจ้งลูกค้าทราบสิ่งที่ที่พักท่านมี
       </h1>
 
-      <WizardStepper propertyId={id} current={4} />
+      <WizardStepper propertyId={id} current={6} />
 
       <div className="space-y-8">
         {sections.map((sec) => (

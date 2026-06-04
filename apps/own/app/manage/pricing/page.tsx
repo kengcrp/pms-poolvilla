@@ -17,6 +17,7 @@ import { SplitPricingPanel } from '@/components/SplitPricingPanel'
 import { LayoutSwitcher, type Layout } from '@/components/LayoutSwitcher'
 import { PropertyHeaderRow } from '@/components/PropertyHeaderRow'
 import { PropertyPickerCard } from '@/components/PropertyPickerCard'
+import { MobilePropertySwitcher, type SwitcherProperty } from '@/components/MobilePropertySwitcher'
 import { useLocalStorageState } from '@/lib/use-local-storage-state'
 
 export default function PricingPage() {
@@ -61,6 +62,28 @@ export default function PricingPage() {
       return name.includes(q) || p.code.toLowerCase().includes(q)
     })
   }, [properties, search])
+
+  // Mobile-only: same single-property view that Layout 1 grid honours via
+  // MobilePropertySwitcher. Mirrors the calendar page.
+  const [mobilePickedId, setMobilePickedId] = useState<string | null>(null)
+  useEffect(() => {
+    if (!mobilePickedId && filteredProperties[0]) setMobilePickedId(filteredProperties[0].id)
+  }, [filteredProperties, mobilePickedId])
+  const switcherProps: SwitcherProperty[] = useMemo(
+    () =>
+      filteredProperties.map((p) => {
+        const defaultVariant = p.variants.find((v) => v.isDefault)
+        return {
+          id: p.id,
+          name: ((p.name as { th?: string } | null)?.th ?? p.code),
+          code: p.code,
+          cover: p.images[0]?.url ?? null,
+          guests: defaultVariant?.maxGuests ?? 0,
+          bedrooms: defaultVariant?.bedrooms ?? p.totalBedrooms ?? 0,
+        }
+      }),
+    [filteredProperties],
+  )
 
   /** Shared helper — build modal payload from a property+variant click. */
   const openDayEdit = (
@@ -147,8 +170,19 @@ export default function PricingPage() {
       {/* Layout 1 — card grid with cover image + mini calendars */}
       {layout === 1 && (
         <>
-          {/* Search bar — filters the grid by property name or code */}
-          <div className="mb-4 flex items-center gap-2">
+          {/* Mobile-only switcher — pill at top, dropdown lists all properties. */}
+          {properties.length > 0 && (
+            <div className="mb-4">
+              <MobilePropertySwitcher
+                properties={switcherProps}
+                selectedId={mobilePickedId}
+                onSelect={setMobilePickedId}
+              />
+            </div>
+          )}
+
+          {/* Search bar — desktop/tablet only. Phone uses the switcher above. */}
+          <div className="mb-4 hidden items-center gap-2 md:flex">
             <div className="relative max-w-md flex-1">
               <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-gray-400" />
               <Input
@@ -179,11 +213,18 @@ export default function PricingPage() {
             if (!defaultVariant) return null
             const varName =
               (defaultVariant.name as { th?: string })?.th ?? `${defaultVariant.bedrooms} ห้องนอน`
+            // Phone: only render the card selected via the switcher.
+            const hideOnPhone = p.id !== mobilePickedId
             return (
-              <div key={p.id} className="flex h-full flex-col">
+              <div
+                key={p.id}
+                className={cn('flex h-full flex-col', hideOnPhone && 'hidden md:flex')}
+              >
                 {/* Split-room pill — clickable, opens the split-calendar view for this property.
-                    Invisible placeholder reserves space for single-variant properties so
-                    card tops align across the grid. */}
+                    On tablet/desktop an invisible placeholder reserves space when a
+                    property has no split variants so card tops still align in the grid.
+                    On phone (single-card view) we skip the placeholder so the card
+                    pulls up flush — no dead space above. */}
                 <div className="flex justify-end">
                   {p.variants.length > 1 ? (
                     <SplitRoomBadge
@@ -191,7 +232,7 @@ export default function PricingPage() {
                       onClick={() => setSplitPanel({ propertyId: p.id })}
                     />
                   ) : (
-                    <div className="invisible" aria-hidden>
+                    <div className="invisible hidden md:block" aria-hidden>
                       <SplitRoomBadge count={1} />
                     </div>
                   )}
@@ -319,26 +360,34 @@ export default function PricingPage() {
         return (
           <div>
             <div className="mb-3 text-sm text-gray-500">ทั้งหมด {properties.length} รายการ</div>
-            {/* items-start so the sticky picker doesn't get stretched to match the
-                right card — required for sticky to pin while the price table scrolls. */}
-            <div className="flex items-start gap-4">
-              <PropertyPickerCard
-                properties={properties}
+
+            {/* Mobile-only switcher — pill at top, dropdown to switch. */}
+            <div className="mb-4">
+              <MobilePropertySwitcher
+                properties={switcherProps}
                 selectedId={pickedId}
                 onSelect={setPickedId}
               />
+            </div>
+
+            {/* items-start so the sticky picker doesn't get stretched to match the
+                right card — required for sticky to pin while the price table scrolls. */}
+            <div className="flex items-start gap-4">
+              {/* Desktop-only vertical thumbnail strip. */}
+              <div className="hidden lg:block">
+                <PropertyPickerCard
+                  properties={properties}
+                  selectedId={pickedId}
+                  onSelect={setPickedId}
+                />
+              </div>
 
               <div className="min-w-0 flex-1">
                 <Card className="overflow-hidden">
-                  {/* Property name header — name+code on the left, ตั้งค่าราคา on the right.
-                      The ราคาขาย / ราคาส่ง toggle lives INSIDE PriceTableVertical (top-left
-                      above the table) — same placement as the calendar page Layout 2. */}
-                  <div className="flex items-start justify-between gap-3 px-4 pt-3 pb-1">
-                    <div className="min-w-0">
-                      <h2 className="truncate text-lg font-bold leading-tight tracking-tight text-gray-900">
-                        {name}
-                      </h2>
-                    </div>
+                  {/* Card header — property name removed; only the ตั้งค่าราคา
+                      button remains, right-aligned. (Switcher pill above already
+                      shows which property is selected.) */}
+                  <div className="flex items-center justify-end gap-3 px-4 pt-3 pb-1">
                     <Button
                       variant="secondary"
                       size="sm"

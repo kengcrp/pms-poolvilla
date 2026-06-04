@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { Button, Icon, Input, cn } from '@pms/ui'
+import { Button, Icon, Input, Textarea, cn } from '@pms/ui'
 import { WizardStepper } from '@/components/WizardStepper'
 
 type Lang = 'th' | 'en' | 'zh'
@@ -159,6 +159,10 @@ export default function ListingDetailsPage() {
   const params = useParams<{ id: string }>()
   const id = params.id
 
+  // Single free-text description of the surrounding area — high-level overview
+  // shown before the structured landmarks/shops lists. Persisted alongside the
+  // other fields in sessionStorage so refresh/back keeps the draft.
+  const [description, setDescription] = useState('')
   const [landmarks, setLandmarks] = useState<LocalizedItem[]>([])
   const [shops, setShops] = useState<LocalizedItem[]>([])
   const [extraDetails, setExtraDetails] = useState<LocalizedItem[]>([])
@@ -169,13 +173,14 @@ export default function ListingDetailsPage() {
       sessionStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
+          description: description.trim(),
           landmarks: landmarks.filter((it) => it.text.th || it.text.en || it.text.zh),
           shops: shops.filter((it) => it.text.th || it.text.en || it.text.zh),
           extraDetails: extraDetails.filter((it) => it.text.th || it.text.en || it.text.zh),
         }),
       )
     }
-    router.push(`/manage/listings/${id}/ical`)
+    router.push(`/manage/listings/${id}/policies`)
   }
 
   return (
@@ -192,7 +197,21 @@ export default function ListingDetailsPage() {
         สถานที่ใกล้เคียง
       </h1>
 
-      <WizardStepper propertyId={id} current={8} />
+      <WizardStepper propertyId={id} current={4} />
+
+      {/* Card: free-text description — high-level overview of the area */}
+      <DetailsCard
+        title="คำอธิบาย"
+        desc="บอกบรรยากาศโดยรวมของพื้นที่ใกล้เคียง — ใกล้ทะเล/ภูเขา? เงียบสงบ? เดินทางสะดวก?"
+        optional
+      >
+        <Textarea
+          rows={3}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="เช่น ตั้งอยู่ในย่านเงียบสงบ ห่างจากชายหาด 5 นาที เดินทางสะดวก..."
+        />
+      </DetailsCard>
 
       {/* Card: landmarks (multi-lang, optional) */}
       <DetailsCard

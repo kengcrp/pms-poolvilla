@@ -72,9 +72,12 @@ const menu: MenuGroup[] = [
 interface SidebarProps {
   mobileOpen: boolean
   onClose: () => void
+  /** Server action that signs the user out. Optional — when omitted the
+   *  logout button is hidden (e.g. on a page that doesn't have auth context). */
+  signOutAction?: () => Promise<void>
 }
 
-export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
+export function Sidebar({ mobileOpen, onClose, signOutAction }: SidebarProps) {
   const pathname = usePathname()
   const t = useT()
 
@@ -133,7 +136,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
 
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 w-64 shrink-0 transform border-r border-gray-200 bg-white transition-transform duration-200 ease-out',
+          'fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 transform flex-col border-r border-gray-200 bg-white transition-transform duration-200 ease-out',
           // Desktop: sticky to viewport top so the menu stays visible while the
           // page scrolls (was lg:static — sidebar scrolled away with content).
           'lg:sticky lg:top-0 lg:h-screen lg:translate-x-0',
@@ -161,7 +164,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
-        <nav className="overflow-y-auto px-3 py-4" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
           {menu.map((group) => (
             <div key={group.groupKey} className="mb-5 last:mb-0">
               <div className="px-3 pb-2 text-sm font-bold text-gray-900">
@@ -248,6 +251,21 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
             </div>
           ))}
         </nav>
+
+        {/* Logout button — pinned to the bottom of the sidebar. Rendered as a
+            server-action form so the existing NextAuth signOut flow runs.
+            Hidden when no action is passed (defensive). */}
+        {signOutAction && (
+          <form action={signOutAction} className="shrink-0 border-t border-gray-200 p-3">
+            <button
+              type="submit"
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50"
+            >
+              <Icon name="logout" className="size-4 shrink-0" />
+              <span className="flex-1 text-left">{t('shell.signOut')}</span>
+            </button>
+          </form>
+        )}
       </aside>
     </>
   )

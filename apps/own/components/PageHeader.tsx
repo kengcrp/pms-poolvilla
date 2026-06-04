@@ -6,12 +6,18 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, children }: PageHeaderProps) {
   return (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">{title}</h1>
-        {description && <p className="mt-1 text-sm text-gray-600">{description}</p>}
+    // Always one row — title on the left, actions on the right (even on mobile)
+    // so compact controls like the layout dropdown stay aligned with the title.
+    <div className="mb-6 flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <h1 className="truncate text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">{title}</h1>
+        {description && <p className="mt-1 text-xs text-gray-600 sm:text-sm">{description}</p>}
       </div>
-      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
+      {children && (
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {children}
+        </div>
+      )}
     </div>
   )
 }
