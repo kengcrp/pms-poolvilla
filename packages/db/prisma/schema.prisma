@@ -371,6 +371,10 @@ model VariantCalendar {
   /// can render strikethrough on the previous agent price too.
   originalAgentPrice Decimal?           @db.Decimal(10, 2)
   priceType          PriceOverrideType?
+  /// Per-day minimum-stay override (nights). null = fall back to the variant's
+  /// weekly minStay for this DOW. Owner sets this on holiday/high-demand days
+  /// to require 2/3-night minimums.
+  minStayOverride    Int?
   note               String?            @db.Text
   bookingId          String?
 

@@ -278,7 +278,7 @@ export default function NewListingPage() {
         )
       }
       // Onboarding flow — show the amenities step before the full edit page
-      router.push(`/manage/listings/${created.id}/details`)
+      router.push(`/manage/listings/${created.id}/policies`)
       router.refresh()
     },
     onError: (e) => {
@@ -658,83 +658,78 @@ export default function NewListingPage() {
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
               ตัวเลือกเสริม
             </div>
-            <label
+
+            {/* Outer card holds 2 zones:
+                  1. checkbox + description (clickable label)
+                  2. price-unit radio cards (only when checkbox is ON)
+                Separating zones avoids the previous `preventDefault`
+                hack that kept inner clicks from toggling the parent label. */}
+            <div
               className={cn(
-                'flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-all',
+                'overflow-hidden rounded-2xl border bg-white transition-all',
                 form.partnerListing
-                  ? 'border-brand-300 bg-brand-50/50 ring-1 ring-inset ring-brand-200'
-                  : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50',
+                  ? 'border-brand-400 shadow-sm shadow-brand-500/10'
+                  : 'border-gray-200',
               )}
             >
-              <input
-                type="checkbox"
-                checked={form.partnerListing}
-                onChange={(e) => setForm({ ...form, partnerListing: e.target.checked })}
-                className="mt-0.5 size-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <Icon name="users" className="size-4 text-brand-600" />
-                  <span className="text-sm font-semibold text-gray-900">
-                    ต้องการลงประกาศกับพาทเนอร์ / Agent
-                  </span>
-                </div>
-                <p className="mt-1 text-xs leading-relaxed text-gray-600">
-                  เปิดใช้งานเพื่อให้แสดงตัวเลือก <strong>"ราคาส่ง Agent"</strong> ในหน้า{' '}
-                  <strong>ปรับราคา</strong> และ <strong>ปฏิทิน</strong> —
-                  ช่วยให้คุณตั้งราคาแยกสำหรับการขายผ่านพาทเนอร์ (OTA / Agent)
-                </p>
-
-                {/* Unit selector — only meaningful when partner listing is on.
-                    Lets the owner pick whether agent price is absolute baht or
-                    a % discount off the sell price. Clicking inside this row
-                    must NOT toggle the outer checkbox; preventDefault handles that. */}
-                {form.partnerListing && (
-                  <div
-                    className="mt-3 flex flex-wrap items-center gap-2"
-                    onClick={(e) => e.preventDefault()}
-                  >
-                    <span className="text-xs font-medium text-gray-600">
-                      หน่วยราคาส่ง:
-                    </span>
-                    <div className="inline-flex rounded-full bg-gray-100 p-0.5">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          setForm({ ...form, agentPriceUnit: 'THB' })
-                        }}
-                        className={cn(
-                          'rounded-full px-3 py-1 text-xs font-semibold transition-colors',
-                          form.agentPriceUnit === 'THB'
-                            ? 'bg-white text-brand-700 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700',
-                        )}
-                      >
-                        ราคาส่ง (฿)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          setForm({ ...form, agentPriceUnit: 'PERCENT' })
-                        }}
-                        className={cn(
-                          'rounded-full px-3 py-1 text-xs font-semibold transition-colors',
-                          form.agentPriceUnit === 'PERCENT'
-                            ? 'bg-white text-brand-700 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700',
-                        )}
-                      >
-                        เปอร์เซ็นต์ (%)
-                      </button>
-                    </div>
-                  </div>
+              {/* Zone 1: checkbox + description */}
+              <label
+                className={cn(
+                  'flex cursor-pointer items-start gap-3 p-4 transition-colors',
+                  form.partnerListing ? 'bg-brand-50/40' : 'hover:bg-gray-50',
                 )}
-              </div>
-            </label>
+              >
+                <input
+                  type="checkbox"
+                  checked={form.partnerListing}
+                  onChange={(e) =>
+                    setForm({ ...form, partnerListing: e.target.checked })
+                  }
+                  className="mt-0.5 size-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <Icon name="users" className="size-4 text-brand-600" />
+                    <span className="text-sm font-semibold text-gray-900">
+                      ต้องการลงประกาศกับพาทเนอร์ / Agent
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-gray-600">
+                    เปิดใช้งานเพื่อให้แสดงตัวเลือก{' '}
+                    <strong>"ราคาส่ง Agent"</strong> ในหน้า{' '}
+                    <strong>ปรับราคา</strong> และ <strong>ปฏิทิน</strong> —
+                    ช่วยให้คุณตั้งราคาแยกสำหรับการขายผ่านพาทเนอร์ (OTA / Agent)
+                  </p>
+                </div>
+              </label>
+
+              {/* Zone 2: price-unit selector — bigger radio cards instead of a
+                  tucked-away pill. Each card shows the symbol + label so the
+                  difference between flat baht and percent-off is unmistakable. */}
+              {form.partnerListing && (
+                <div className="border-t border-brand-200/60 bg-white p-4">
+                  <div className="mb-2 text-xs font-semibold text-gray-700">
+                    หน่วยราคาส่ง Agent
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <PriceUnitOption
+                      active={form.agentPriceUnit === 'THB'}
+                      onClick={() => setForm({ ...form, agentPriceUnit: 'THB' })}
+                      symbol="฿"
+                      label="ราคาส่ง"
+                      desc="ระบุเป็นจำนวนเงิน (บาท) แยกจากราคาขาย"
+                    />
+                    <PriceUnitOption
+                      active={form.agentPriceUnit === 'PERCENT'}
+                      onClick={() => setForm({ ...form, agentPriceUnit: 'PERCENT' })}
+                      symbol="%"
+                      label="เปอร์เซ็นต์"
+                      desc="คิดเป็น % ลดจากราคาขาย เช่น 10% off"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {error && (
@@ -756,5 +751,55 @@ export default function NewListingPage() {
         </form>
       </Card>
     </div>
+  )
+}
+
+/** Radio-card option for the agent-price unit selector — symbol + label + desc. */
+function PriceUnitOption({
+  active,
+  onClick,
+  symbol,
+  label,
+  desc,
+}: {
+  active: boolean
+  onClick: () => void
+  symbol: string
+  label: string
+  desc: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex items-start gap-3 rounded-xl border-2 p-3 text-left transition-all',
+        active
+          ? 'border-brand-500 bg-brand-50 shadow-sm shadow-brand-500/10'
+          : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50',
+      )}
+    >
+      <div
+        className={cn(
+          'flex size-9 shrink-0 items-center justify-center rounded-lg text-base font-extrabold',
+          active ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-500',
+        )}
+      >
+        {symbol}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div
+          className={cn(
+            'text-sm font-bold',
+            active ? 'text-brand-700' : 'text-gray-900',
+          )}
+        >
+          {label}
+        </div>
+        <div className="mt-0.5 text-[11px] leading-snug text-gray-500">
+          {desc}
+        </div>
+      </div>
+    </button>
   )
 }

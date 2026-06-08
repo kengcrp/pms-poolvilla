@@ -180,13 +180,13 @@ export default function ListingDetailsPage() {
         }),
       )
     }
-    router.push(`/manage/listings/${id}/policies`)
+    router.push(`/manage/listings/${id}/amenities`)
   }
 
   return (
     <div className="mx-auto max-w-5xl pb-24">
       <Link
-        href={`/manage/listings/${id}/area`}
+        href={`/manage/listings/${id}/policies`}
         className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 transition-colors hover:text-brand-700"
       >
         <Icon name="chevronLeft" className="size-3.5" />
@@ -197,7 +197,7 @@ export default function ListingDetailsPage() {
         สถานที่ใกล้เคียง
       </h1>
 
-      <WizardStepper propertyId={id} current={4} />
+      <WizardStepper propertyId={id} current={5} />
 
       {/* Card: free-text description — high-level overview of the area */}
       <DetailsCard
@@ -245,7 +245,7 @@ export default function ListingDetailsPage() {
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-gray-200 bg-white/95 backdrop-blur">
         <div className="px-4 py-3 sm:px-6 lg:px-8">
           <div className="mx-auto flex max-w-5xl items-center justify-between">
-            <Link href={`/manage/listings/${id}/area`}>
+            <Link href={`/manage/listings/${id}/policies`}>
               <Button variant="secondary" type="button">
                 <Icon name="chevronLeft" className="size-3.5" />
                 ย้อนกลับ

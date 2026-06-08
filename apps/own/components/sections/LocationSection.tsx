@@ -6,9 +6,13 @@ import { Button, Input, Label, Select, Textarea } from '@pms/ui'
 
 interface Props {
   propertyId: string
+  /** Optional slot rendered between the first card (ที่ตั้ง) and the rest
+   *  (พิกัด / ที่อยู่). Used by the wizard's area step to drop the location-
+   *  amenity tiles right beneath the location/zone/province selector. */
+  afterFirstCard?: React.ReactNode
 }
 
-export function LocationSection({ propertyId }: Props) {
+export function LocationSection({ propertyId, afterFirstCard }: Props) {
   const utils = trpc.useUtils()
   const { data: property } = trpc.property.byId.useQuery({ id: propertyId })
   const { data: locations } = trpc.location.list.useQuery()
@@ -69,70 +73,124 @@ export function LocationSection({ propertyId }: Props) {
     },
   })
 
+  /** Visible feedback once the "ดึงพิกัด" button successfully sets the lat/lng. */
+  const [gmapStatus, setGmapStatus] = useState<'idle' | 'ok' | 'error'>('idle')
+  const [gmapMessage, setGmapMessage] = useState<string | null>(null)
+
   // Server-side resolver — needed for shortlinks like maps.app.goo.gl/* because browsers
   // can't follow those redirects (CORS).
   const resolveGmap = trpc.propertyExtras.resolveGmapCoords.useMutation({
     onSuccess: (r) => {
       setForm((f) => ({ ...f, lat: String(r.lat), lng: String(r.lng) }))
       setError(null)
+      setGmapStatus('ok')
+      setGmapMessage(`ดึงพิกัดสำเร็จ (${r.lat.toFixed(5)}, ${r.lng.toFixed(5)})`)
     },
-    onError: (e) => setError(e.message),
+    onError: (e) => {
+      setError(e.message)
+      setGmapStatus('error')
+      setGmapMessage(e.message)
+    },
   })
 
-  function handleSave() {
+  /**
+   * Debounced auto-save — replaces the explicit "บันทึกข้อมูลพื้นที่" button.
+   * Only fires once all required fields (โซน / พิกัด / ที่อยู่) are filled, so
+   * partial edits are silently skipped. 800ms debounce keeps the mutation off
+   * the keystroke path while still feeling responsive — the savedAt timestamp
+   * updates as confirmation.
+   */
+  useEffect(() => {
+    const ready =
+      Boolean(form.locationId) && Boolean(form.lat) && Boolean(form.lng) && Boolean(form.address)
+    if (!ready) return
+    const t = setTimeout(() => {
+      setSaving(true)
+      upsert.mutate({
+        propertyId,
+        locationId: form.locationId,
+        zoneId: form.zoneId || null,
+        province: form.province,
+        lat: Number(form.lat),
+        lng: Number(form.lng),
+        gmapUrl: form.gmapUrl || null,
+        address: form.address,
+        distanceTargetType: form.distanceTargetType || null,
+        distanceValue: form.distanceValue ? Number(form.distanceValue) : null,
+        distanceUnit: form.distanceUnit,
+      })
+    }, 800)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    form.locationId,
+    form.zoneId,
+    form.province,
+    form.lat,
+    form.lng,
+    form.gmapUrl,
+    form.address,
+    form.distanceTargetType,
+    form.distanceValue,
+    form.distanceUnit,
+  ])
+
+  /** Apply lat/lng locally + report success to the user. */
+  function applyCoords(lat: string, lng: string) {
+    setForm((f) => ({ ...f, lat, lng }))
     setError(null)
-    if (!form.locationId) return setError('กรุณาเลือกพื้นที่')
-    if (!form.lat || !form.lng) return setError('กรุณาระบุพิกัด')
-    if (!form.address) return setError('กรุณาระบุที่อยู่')
-    setSaving(true)
-    upsert.mutate({
-      propertyId,
-      locationId: form.locationId,
-      zoneId: form.zoneId || null,
-      province: form.province,
-      lat: Number(form.lat),
-      lng: Number(form.lng),
-      gmapUrl: form.gmapUrl || null,
-      address: form.address,
-      distanceTargetType: form.distanceTargetType || null,
-      distanceValue: form.distanceValue ? Number(form.distanceValue) : null,
-      distanceUnit: form.distanceUnit,
-    })
+    setGmapStatus('ok')
+    setGmapMessage(`ดึงพิกัดสำเร็จ (${lat}, ${lng})`)
   }
 
   function detectFromGmap() {
     setError(null)
+    setGmapStatus('idle')
+    setGmapMessage(null)
     const url = form.gmapUrl.trim()
-    if (!url) return
-    // Quick local match for direct /maps URLs (handles ?q=, @, !3d/!4d, ?ll=, ?query=)
+    if (!url) {
+      setGmapStatus('error')
+      setGmapMessage('กรุณาวาง Google Maps URL ก่อนกดดึงพิกัด')
+      return
+    }
+    // Try multiple URL patterns — Google Maps URLs vary by format/version.
+    // Most common matches:
+    //   @lat,lng,zoom         /maps/@13.7563,100.5018,17z (browser URL bar)
+    //   !3d{lat}!4d{lng}      embedded in /maps/place/.../data=...
+    //   ?q=lat,lng            search-style /maps?q=...
+    //   ?ll=lat,lng           place-link /maps?ll=...
+    //   ?query=lat,lng        Maps API place links
     let m: RegExpMatchArray | null = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
     if (!m) m = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/)
     if (!m) m = url.match(/[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/)
     if (!m) m = url.match(/[?&]query=(-?\d+\.\d+),(-?\d+\.\d+)/)
     if (!m) {
+      // !3d{lat}!4d{lng} pattern (place URLs)
       const lat3 = url.match(/!3d(-?\d+\.\d+)/)
       const lng4 = url.match(/!4d(-?\d+\.\d+)/)
       if (lat3 && lng4) {
-        setForm((f) => ({ ...f, lat: lat3[1]!, lng: lng4[1]! }))
+        applyCoords(lat3[1]!, lng4[1]!)
         return
       }
     }
     if (m) {
-      setForm((f) => ({ ...f, lat: m![1]!, lng: m![2]! }))
+      applyCoords(m[1]!, m[2]!)
       return
     }
-    // Shortlink (maps.app.goo.gl / goo.gl/maps) — needs server resolver because the redirect
-    // chain isn't accessible from the browser due to CORS.
+    // Shortlink (maps.app.goo.gl / goo.gl/maps) — needs server resolver because the
+    // redirect chain isn't accessible from the browser due to CORS.
     resolveGmap.mutate({ url })
   }
 
   return (
     <div className="space-y-3">
-      {/* Card 1: location + zone + province */}
-      <LocationCard title="ที่ตั้ง" desc="เลือกพื้นที่และโซนที่ตรงกับที่พักของคุณ">
+      {/* Card 1: location + province — zone removed per UX request. We still keep
+          `zoneId` in form state (default '') and submit it as null so the backend
+          schema stays satisfied without any owner input. */}
+      <LocationCard title="ที่ตั้ง" desc="เลือกโซนที่ตรงกับที่พักของคุณ">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <Label required>พื้นที่</Label>
+            <Label required>โซน</Label>
             <Select
               value={form.locationId}
               onChange={(e) => {
@@ -146,7 +204,7 @@ export function LocationSection({ propertyId }: Props) {
                 }))
               }}
             >
-              <option value="">— เลือกพื้นที่ —</option>
+              <option value="">— เลือกโซน —</option>
               {locations?.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.name} ({l.province})
@@ -155,26 +213,18 @@ export function LocationSection({ propertyId }: Props) {
             </Select>
           </div>
           <div>
-            <Label>โซน</Label>
-            <Select
-              value={form.zoneId}
-              onChange={(e) => setForm({ ...form, zoneId: e.target.value })}
-              disabled={!selectedLocation || selectedLocation.zones.length === 0}
-            >
-              <option value="">— ไม่ระบุ —</option>
-              {selectedLocation?.zones.map((z) => (
-                <option key={z.id} value={z.id}>
-                  {z.name}
-                </option>
-              ))}
-            </Select>
+            <Label required>จังหวัด</Label>
+            <Input
+              value={form.province}
+              onChange={(e) => setForm({ ...form, province: e.target.value })}
+            />
           </div>
         </div>
-        <div>
-          <Label required>จังหวัด</Label>
-          <Input value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })} />
-        </div>
       </LocationCard>
+
+      {/* Optional slot — caller can drop extra content right under the first
+          card (e.g. the area-step's location-amenity tile grid). */}
+      {afterFirstCard}
 
       {/* Card 2: Google Maps + coordinates */}
       <LocationCard title="พิกัด" desc="วางลิงก์ Google Maps แล้วระบบจะดึงพิกัดให้อัตโนมัติ">
@@ -196,8 +246,24 @@ export function LocationSection({ propertyId }: Props) {
             </Button>
           </div>
           <p className="mt-1 text-[11px] text-gray-500">
-            รองรับลิงก์ย่อจาก Google Maps (maps.app.goo.gl)
+            รองรับลิงก์ย่อจาก Google Maps (maps.app.goo.gl) — หากดึงไม่สำเร็จ
+            กรอกละติจูด/ลองจิจูดเองได้ด้านล่าง
           </p>
+          {/* Inline status — sits right under the URL input so users get
+              instant feedback after clicking "ดึงพิกัด" instead of having
+              to scroll to find an error banner. */}
+          {gmapStatus === 'ok' && gmapMessage && (
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
+              <span aria-hidden>✓</span>
+              {gmapMessage}
+            </div>
+          )}
+          {gmapStatus === 'error' && gmapMessage && (
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-200">
+              <span aria-hidden>⚠</span>
+              {gmapMessage}
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -284,13 +350,14 @@ export function LocationSection({ propertyId }: Props) {
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-2">
-        <div className="text-xs text-gray-500">
-          {savedAt && `บันทึกล่าสุด ${savedAt.toLocaleTimeString('th-TH')}`}
-        </div>
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? 'กำลังบันทึก...' : 'บันทึกข้อมูลพื้นที่'}
-        </Button>
+      {/* บันทึกอัตโนมัติ — ไม่มีปุ่ม "บันทึกข้อมูลพื้นที่" แล้ว แต่ยังบอก
+          สถานะให้เห็นว่าระบบกำลังบันทึก / บันทึกล่าสุดเมื่อไหร่ */}
+      <div className="flex items-center justify-end pt-1 text-xs text-gray-500">
+        {saving
+          ? 'กำลังบันทึก...'
+          : savedAt
+            ? `บันทึกล่าสุด ${savedAt.toLocaleTimeString('th-TH')}`
+            : ''}
       </div>
     </div>
   )

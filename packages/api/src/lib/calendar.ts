@@ -42,6 +42,10 @@ export type CalendarDay = {
   /** Pre-discount original AGENT price — same role as `originalPrice` but for the
    *  agent / OTA price column. Powers strikethrough on the agent-mode calendar. */
   originalAgentPrice: number | null
+  /** Effective minimum-stay (nights) for this day — per-day override > weekly
+   *  default for this DOW. Surfaced in the day-edit drawer so the owner can
+   *  set 2/3-night minimums on holidays. */
+  minStay: number
   note: string | null
   bookingId: string | null
   /** Customer name if this day is linked to a booking. Useful for UI labels. */
@@ -151,6 +155,9 @@ export async function getCalendarRange(
     : []
   const customerByBookingId = new Map(bookings.map((b) => [b.id, b.customerName]))
 
+  // Weekly minStay-per-DOW map — used as the fallback when a day has no
+  // per-day minStay override of its own.
+  const weeklyMinStayByDow = new Map(weekly.map((w) => [w.dayOfWeek, w.minStay]))
   const weeklyByDow = new Map(weekly.map((w) => [w.dayOfWeek, Number(w.price)]))
   const weeklyAgentByDow = new Map(
     weekly.map((w) => [w.dayOfWeek, w.agentPrice !== null ? Number(w.agentPrice) : null]),
@@ -176,6 +183,7 @@ export async function getCalendarRange(
       : null
     const siblingStatus = lockedBySibling ? siblingHold!.status : null
     const siblingNote = lockedBySibling ? siblingHold!.note : null
+    const defaultMinStay = weeklyMinStayByDow.get(dow) ?? 1
     if (ov) {
       return {
         date,
@@ -189,6 +197,8 @@ export async function getCalendarRange(
         priceType: ov.priceType,
         originalPrice: ov.originalPrice != null ? Number(ov.originalPrice) : null,
         originalAgentPrice: ov.originalAgentPrice != null ? Number(ov.originalAgentPrice) : null,
+        // Per-day minStay override > weekly default.
+        minStay: ov.minStayOverride ?? defaultMinStay,
         note: ov.note,
         bookingId: ov.bookingId,
         customerName: ov.bookingId ? (customerByBookingId.get(ov.bookingId) ?? null) : null,
@@ -209,6 +219,7 @@ export async function getCalendarRange(
       priceType: null,
       originalPrice: null,
       originalAgentPrice: null,
+      minStay: defaultMinStay,
       note: null,
       bookingId: null,
       customerName: null,

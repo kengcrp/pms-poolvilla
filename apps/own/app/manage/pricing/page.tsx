@@ -32,8 +32,12 @@ export default function PricingPage() {
     partnerListing: boolean
     isDefault: boolean
   } | null>(null)
-  // Day-price modal — opens when user clicks a date cell in any layout
-  const [dayEdit, setDayEdit] = useState<{ variantId: string; name: string; date: Date } | null>(null)
+  // Day-price modal — opens for single-cell edits when the calendar isn't in
+  // multi-pick mode. Multi-pick lives in its own `multiPick` state below so
+  // the two flows don't fight each other.
+  const [dayEdit, setDayEdit] = useState<{ variantId: string; name: string; date: Date } | null>(
+    null,
+  )
   // Price mode kept PER PROPERTY so each card's toggle works independently
   const [priceModeByProperty, setPriceModeByProperty] = useState<Record<string, 'sell' | 'agent'>>({})
   const getPriceMode = (id: string): 'sell' | 'agent' => priceModeByProperty[id] ?? 'sell'
@@ -96,6 +100,76 @@ export default function PricingPage() {
     const vName = v ? ((v.name as { th?: string })?.th ?? `${v.bedrooms} ห้องนอน`) : ''
     setDayEdit({ variantId, name: `${name} — ${vName}`, date })
   }
+
+  /** Live multi-pick selection — driven by MiniCalendar's onMultiSelectChange.
+   *  As soon as the owner taps the first cell, this populates → DayPriceModal
+   *  auto-opens on the right with the picked dates pre-seeded. Every additional
+   *  toggle updates the list in place.
+   *
+   *  `clearVerByVariant` holds a per-variant clear counter — bumping a variant's
+   *  number forces that MiniCalendar (which receives the matching `clearSignal`
+   *  prop) to wipe its picked cells. We use this both to clear the active
+   *  calendar after the drawer closes AND to clear the previous calendar when
+   *  the owner switches to a different property mid-selection. */
+  const [multiPick, setMultiPick] = useState<{
+    variantId: string
+    name: string
+    dates: Date[]
+    partnerListing: boolean
+  } | null>(null)
+  const [clearVerByVariant, setClearVerByVariant] = useState<Record<string, number>>({})
+
+  const bumpClear = (variantId: string) =>
+    setClearVerByVariant((cv) => ({ ...cv, [variantId]: (cv[variantId] ?? 0) + 1 }))
+
+  const startOrUpdateMultiPick = (
+    p: (typeof properties)[number],
+    variantId: string,
+    dates: Date[],
+  ) => {
+    if (dates.length === 0) {
+      // Only nuke multiPick when the EMPTY call comes from the variant we're
+      // currently tracking. Calls from other variants (after a clearSignal
+      // sweep wiped their local picks) would otherwise clobber the live pick
+      // on the new variant.
+      setMultiPick((prev) =>
+        !prev || prev.variantId !== variantId ? prev : null,
+      )
+      return
+    }
+    const name = (p.name as { th?: string })?.th ?? p.code
+    const v = p.variants.find((x) => x.id === variantId)
+    const vName = v ? ((v.name as { th?: string })?.th ?? `${v.bedrooms} ห้องนอน`) : ''
+    setMultiPick((prev) => {
+      // Switching properties mid-selection → bump the previous variant's clear
+      // counter so its MiniCalendar wipes its picked cells.
+      if (prev && prev.variantId !== variantId) bumpClear(prev.variantId)
+      return {
+        variantId,
+        name: `${name} — ${vName}`,
+        dates,
+        partnerListing: p.partnerListing,
+      }
+    })
+  }
+
+  /** Drawer close — drop the live selection AND ask the active MiniCalendar to
+   *  clear its picked cells so the next pick starts fresh. */
+  const closeMultiPick = () => {
+    if (multiPick) bumpClear(multiPick.variantId)
+    setMultiPick(null)
+  }
+
+  // YYYY-MM-DD list derived from the live dates — DayPriceModal accepts string[].
+  const multiPickYmd = useMemo(() => {
+    if (!multiPick) return undefined
+    return multiPick.dates.map((d) => {
+      const y = d.getUTCFullYear()
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+      const dd = String(d.getUTCDate()).padStart(2, '0')
+      return `${y}-${m}-${dd}`
+    })
+  }, [multiPick])
 
   /** Actions slot for PropertyHeaderRow in Layout 2/3 — gear button stacked above the price toggle.
    *  Opens the property-wide weekly-rate modal (tabs for เหมาหลัง + แบ่งห้องนอน).
@@ -261,23 +335,11 @@ export default function PricingPage() {
                 </div>
 
                 <div className="space-y-2 px-3 pb-3 pt-1">
-                  {/* Meta row + ตั้งค่าราคา on the right */}
+                  {/* Action row — ตั้งค่าราคา pill on the LEFT, ราคาขาย/ราคาส่ง
+                      toggle on the RIGHT. The toggle is always rendered (made
+                      invisible when partnerListing is off) so card heights stay
+                      consistent across the grid. */}
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
-                      <span className="inline-flex items-center gap-1 text-gray-900">
-                        <Icon name="bed" className="size-3.5 text-gray-600" />
-                        <span className="font-semibold">{defaultVariant.bedrooms}</span>
-                        <span className="font-medium text-gray-700">นอน</span>
-                      </span>
-                      <span className="text-gray-300">·</span>
-                      <span className="inline-flex items-center gap-1 text-gray-900">
-                        <Icon name="users" className="size-3.5 text-gray-600" />
-                        <span className="font-semibold">{defaultVariant.maxGuests}</span>
-                        <span className="font-medium text-gray-700">ท่าน</span>
-                      </span>
-                    </div>
-                    {/* ตั้งค่าราคา pill — white card-style button matching the design mockup
-                        (border + shadow, dark text/icon, rounded-full) */}
                     <button
                       type="button"
                       onClick={() => setPropertyRateFor(p.id)}
@@ -287,18 +349,13 @@ export default function PricingPage() {
                       <Icon name="gear" className="size-3.5 text-gray-700" />
                       ตั้งค่าราคา
                     </button>
-                  </div>
 
-                  {/* ราคาขาย / ราคาส่ง toggle — centered row.
-                      Sized to roughly match the month-nav pill width below so they line up
-                      visually. Always rendered (invisible placeholder when no partnerListing)
-                      so card heights match across the grid. */}
-                  <div className="flex justify-center" aria-hidden={!p.partnerListing}>
                     <div
                       className={cn(
-                        'inline-flex w-[220px] rounded-full bg-gray-100 p-1 shadow-inner',
+                        'inline-flex w-[180px] rounded-full bg-gray-100 p-1 shadow-inner',
                         !p.partnerListing && 'invisible',
                       )}
+                      aria-hidden={!p.partnerListing}
                     >
                       <button
                         type="button"
@@ -335,6 +392,11 @@ export default function PricingPage() {
                     priceMode={getPriceMode(p.id)}
                     dense
                     onCellClick={(date) => openDayEdit(p, defaultVariant.id, date)}
+                    enableMultiSelect
+                    onMultiSelectChange={(dates) =>
+                      startOrUpdateMultiPick(p, defaultVariant.id, dates)
+                    }
+                    clearSignal={clearVerByVariant[defaultVariant.id] ?? 0}
                   />
 
                 </div>
@@ -516,12 +578,28 @@ export default function PricingPage() {
         isDefault={editing?.isDefault ?? false}
       />
 
+      {/* Single-cell editor — opens when the owner taps a cell while NOT in
+          multi-pick mode (currently unreachable since enableMultiSelect is on
+          everywhere, but kept for parity if a future surface opts out). */}
       <DayPriceModal
-        open={!!dayEdit}
+        open={!!dayEdit && !multiPick}
         onClose={() => setDayEdit(null)}
         variantId={dayEdit?.variantId ?? null}
         variantLabel={dayEdit?.name ?? ''}
         initialDate={dayEdit?.date ?? null}
+      />
+
+      {/* Multi-pick price drawer — auto-opens as soon as the owner picks the
+          first day on any property's calendar. Live-updates as more days are
+          added. Closing wipes the picked cells via clearSignal. */}
+      <DayPriceModal
+        open={!!multiPick}
+        onClose={closeMultiPick}
+        variantId={multiPick?.variantId ?? null}
+        variantLabel={multiPick?.name ?? ''}
+        initialDate={multiPick?.dates[0] ?? null}
+        initialMultiDates={multiPickYmd}
+        partnerListing={multiPick?.partnerListing ?? false}
       />
 
       <SplitPricingPanel

@@ -78,7 +78,7 @@ export default function ListingPoliciesPage() {
         กรอกนโยบายเสริมคนเข้าพัก
       </h1>
 
-      <WizardStepper propertyId={id} current={5} />
+      <WizardStepper propertyId={id} current={4} />
 
       {/* ─── Card: capacity ─────────────────────────────────────── */}
       <Card title="ความจุที่พัก" icon="users" desc="จำนวนผู้เข้าพักสูงสุดที่ที่พักนี้รองรับได้">
@@ -148,13 +148,13 @@ export default function ListingPoliciesPage() {
               <Button
                 variant="secondary"
                 type="button"
-                onClick={() => persistAndGoto(`/manage/listings/${id}/amenities`)}
+                onClick={() => persistAndGoto(`/manage/listings/${id}/details`)}
               >
                 ข้าม
               </Button>
               <Button
                 type="button"
-                onClick={() => persistAndGoto(`/manage/listings/${id}/amenities`)}
+                onClick={() => persistAndGoto(`/manage/listings/${id}/details`)}
               >
                 ดำเนินการต่อ
                 <Icon name="chevronRight" className="size-3.5" />

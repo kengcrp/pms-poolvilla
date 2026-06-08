@@ -148,6 +148,10 @@ export const pricingRouter = router({
          *  for the agent / OTA price column. Used to render strikethrough on the
          *  agent-mode calendar. */
         originalAgentPrice: z.number().nonnegative().nullable().optional(),
+        /** Per-day minimum-stay override (nights). null = fall back to the
+         *  variant's weekly minStay for this DOW. Surfaced in the day-edit
+         *  drawer so the owner can require 2/3-night minimums on holidays. */
+        minStay: z.number().int().min(1).max(60).nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -193,6 +197,7 @@ export const pricingRouter = router({
               priceType: input.priceType ?? null,
               originalPrice: originalPriceForSave,
               originalAgentPrice: originalAgentForSave,
+              minStayOverride: input.minStay ?? null,
               note: input.note ?? undefined,
             },
             create: {
@@ -204,6 +209,7 @@ export const pricingRouter = router({
               priceType: input.priceType ?? null,
               originalPrice: originalPriceForSave,
               originalAgentPrice: originalAgentForSave,
+              minStayOverride: input.minStay ?? null,
               note: input.note ?? null,
             },
           })

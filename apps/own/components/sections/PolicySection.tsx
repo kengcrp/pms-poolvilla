@@ -7,6 +7,12 @@ import { Button, Input, Label, Select, Textarea } from '@pms/ui'
 /** Hourly time slots 00:00 — 23:00 for the check-in/out dropdowns. */
 const TIME_OPTIONS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`)
 
+/** sessionStorage key for sound-policy draft. Lives client-side until we wire a
+ *  dedicated DB column; survives back/forward navigation across wizard steps. */
+const SOUND_POLICY_STORAGE_KEY = 'pms.newListing.soundPolicy'
+
+type SoundPolicyMode = 'allowed' | 'limited' | 'prohibited'
+
 interface Props {
   propertyId: string
 }
@@ -35,6 +41,15 @@ export function PolicySection({ propertyId }: Props) {
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Sound policy — held in component state + persisted to sessionStorage so a
+  // back-nav or refresh keeps the choice. We deliberately do NOT include it in
+  // the upsertPolicy payload yet because the backend hasn't grown a column for
+  // it; when that lands we'll plug these values into the mutation.
+  const [soundMode, setSoundMode] = useState<SoundPolicyMode>('limited')
+  const [quietHoursStart, setQuietHoursStart] = useState('22:00')
+  const [quietHoursEnd, setQuietHoursEnd] = useState('08:00')
+  const [soundNote, setSoundNote] = useState('')
 
   useEffect(() => {
     const p = property?.policy
@@ -80,6 +95,41 @@ export function PolicySection({ propertyId }: Props) {
     }
   }, [property?.policy])
 
+  // Hydrate sound-policy draft on mount.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw = sessionStorage.getItem(SOUND_POLICY_STORAGE_KEY)
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw) as {
+        mode?: SoundPolicyMode
+        quietHoursStart?: string
+        quietHoursEnd?: string
+        note?: string
+      }
+      if (parsed.mode) setSoundMode(parsed.mode)
+      if (parsed.quietHoursStart) setQuietHoursStart(parsed.quietHoursStart)
+      if (parsed.quietHoursEnd) setQuietHoursEnd(parsed.quietHoursEnd)
+      if (typeof parsed.note === 'string') setSoundNote(parsed.note)
+    } catch {
+      /* malformed — ignore */
+    }
+  }, [])
+
+  // Persist sound-policy draft whenever it changes.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    sessionStorage.setItem(
+      SOUND_POLICY_STORAGE_KEY,
+      JSON.stringify({
+        mode: soundMode,
+        quietHoursStart,
+        quietHoursEnd,
+        note: soundNote,
+      }),
+    )
+  }, [soundMode, quietHoursStart, quietHoursEnd, soundNote])
+
   const upsert = trpc.propertyExtras.upsertPolicy.useMutation({
     onSuccess: () => {
       utils.property.byId.invalidate({ id: propertyId })
@@ -118,10 +168,10 @@ export function PolicySection({ propertyId }: Props) {
     <div className="space-y-3">
       {/* Card 1: check-in/out times — dropdown style with sub-groups */}
       <PolicyCard title="เวลาเช็คอินและเช็คเอาท์" desc="กำหนดช่วงเวลาที่แขกเข้าพัก-ออกจากที่พัก">
-        {/* Sub-group: ช่วงเวลาเช็คอิน */}
+        {/* Sub-group: ช่วงเวลาเช็คอิน — เวลาเริ่มต้น / เวลาสิ้นสุด อยู่บรรทัดเดียวกัน */}
         <div>
           <div className="mb-2 text-sm font-bold text-gray-900">ช่วงเวลาเช็คอิน</div>
-          <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <Label required>เวลาเริ่มต้น</Label>
               <Select
@@ -182,6 +232,111 @@ export function PolicySection({ propertyId }: Props) {
             value={form.deposit}
             onChange={(e) => setForm({ ...form, deposit: Number(e.target.value) })}
           />
+        </div>
+      </PolicyCard>
+
+      {/* Card: นโยบายการใช้เสียง — ระดับเสียงที่อนุญาตและช่วงเวลางดเสียงดัง */}
+      <PolicyCard
+        title="นโยบายการใช้เสียง"
+        desc="กำหนดระดับเสียงที่อนุญาตและช่วงเวลางดเสียงดัง"
+      >
+        {/* Radio cards: 3 ระดับนโยบายเสียง */}
+        <div>
+          <Label required>ระดับเสียงที่อนุญาต</Label>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {(
+              [
+                {
+                  value: 'allowed',
+                  title: 'อนุญาต',
+                  desc: 'จัดปาร์ตี้/เปิดเพลงเสียงดังได้',
+                },
+                {
+                  value: 'limited',
+                  title: 'จำกัด',
+                  desc: 'งดเสียงดังในช่วงเวลาที่กำหนด',
+                },
+                {
+                  value: 'prohibited',
+                  title: 'ไม่อนุญาต',
+                  desc: 'ห้ามเสียงดัง/ปาร์ตี้ตลอดการเข้าพัก',
+                },
+              ] as const
+            ).map((opt) => {
+              const active = soundMode === opt.value
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setSoundMode(opt.value)}
+                  className={
+                    'rounded-xl border p-3 text-left transition-all ' +
+                    (active
+                      ? 'border-brand-500 bg-brand-50 shadow-sm shadow-brand-500/10'
+                      : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50')
+                  }
+                >
+                  <div
+                    className={
+                      'text-sm ' +
+                      (active ? 'font-bold text-brand-700' : 'font-medium text-gray-800')
+                    }
+                  >
+                    {opt.title}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-gray-500">{opt.desc}</div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ช่วงเวลางดเสียงดัง — เริ่มต้น / สิ้นสุด อยู่บรรทัดเดียวกัน
+             ซ่อนเมื่อเลือก "อนุญาต" (เปิดเสียงได้ตลอด) เพราะไม่มี quiet-hours จริงๆ */}
+        {soundMode !== 'allowed' && (
+          <div>
+            <Label>ช่วงเวลางดเสียงดัง</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="mb-1 text-[11px] text-gray-500">เริ่มต้น</div>
+                <Select
+                  value={quietHoursStart}
+                  onChange={(e) => setQuietHoursStart(e.target.value)}
+                >
+                  {TIME_OPTIONS.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <div className="mb-1 text-[11px] text-gray-500">สิ้นสุด</div>
+                <Select
+                  value={quietHoursEnd}
+                  onChange={(e) => setQuietHoursEnd(e.target.value)}
+                >
+                  {TIME_OPTIONS.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* รายละเอียดเพิ่มเติม (ไม่บังคับ) */}
+        <div>
+          <Label>รายละเอียดเพิ่มเติม</Label>
+          <Textarea
+            rows={3}
+            value={soundNote}
+            onChange={(e) => setSoundNote(e.target.value)}
+            placeholder="เช่น เปิดเพลงได้ถึง 22:00, ห้ามใช้ลำโพงบลูทูธในสระ"
+          />
+          <p className="mt-1 text-[11px] text-gray-500">ไม่บังคับ</p>
         </div>
       </PolicyCard>
 

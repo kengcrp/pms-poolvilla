@@ -28,42 +28,55 @@ const sections: Section[] = [
     amenities: [
       { code: 'wifi', label: 'Wi-Fi', icon: 'wifi' },
       { code: 'tv', label: 'ทีวี', icon: 'tv' },
-      { code: 'kitchen', label: 'ห้องครัว', icon: 'kitchen' },
+      { code: 'kitchen', label: 'ครัวไทย', icon: 'kitchen' },
+      { code: 'western_kitchen', label: 'ครัวฝรั่ง', icon: 'kitchen' },
+      { code: 'kitchen_equipment', label: 'อุปกรณ์ครัว', icon: 'toolbox' },
       { code: 'washer', label: 'เครื่องซักผ้า', icon: 'shirt' },
       { code: 'dryer', label: 'เครื่องอบผ้า', icon: 'wind' },
-      { code: 'parking', label: 'ที่จอดรถฟรี', icon: 'parking' },
+      { code: 'parking', label: 'ที่จอดรถ', icon: 'parking' },
       { code: 'ac', label: 'เครื่องปรับอากาศ', icon: 'ac' },
       { code: 'workspace', label: 'พื้นที่ทำงาน', icon: 'briefcase' },
-      { code: 'shower', label: 'เครื่องอาบน้ำ', icon: 'shower' },
-      { code: 'karaoke', label: 'คาราโอเกะ', icon: 'microphone' },
-      { code: 'smart_tv', label: 'Smart TV เชื่อมต่อลำโพง', icon: 'tv' },
+      { code: 'shower', label: 'อุปกรณ์อาบน้ำ', icon: 'shower' },
+      // Moved from "ฟังก์ชั่นจุดเด่น" per spec — treat as everyday utilities.
+      { code: 'bbq', label: 'เตาบาร์บีคิว', icon: 'fire' },
+      { code: 'gym', label: 'อุปกรณ์ออกกำลังกาย', icon: 'dumbbell' },
+      // Newly added per spec — common hotel-style convenience items.
+      { code: 'minibar', label: 'Minibar', icon: 'glassWater' },
+      { code: 'refrigerator', label: 'ตู้เย็น', icon: 'snowflake' },
+      { code: 'iron_board', label: 'เตารีด', icon: 'shirt' },
+      { code: 'welcome_drink', label: 'Welcome Drink', icon: 'coffee' },
+      { code: 'welcome_snack', label: 'Welcome Snack', icon: 'glassWater' },
     ],
   },
   {
     title: 'ฟังก์ชั่นจุดเด่นที่พัก',
     amenities: [
+      // Removed per spec: ลานสนามหญ้า / พื้นที่ทานข้าวกลางแจ้ง / เตาไฟกลางแจ้ง /
+      // เตาผิงในบ้าน / อ่างน้ำร้อน / ติดทะเลสาบ-ทะเล.
+      // Views + ติดชายหาด/น้ำตก/แม่น้ำ moved to the new "ข้อมูลที่ตั้ง" section below.
       { code: 'pool', label: 'สระว่ายน้ำ', icon: 'swimmer' },
-      { code: 'hot_tub', label: 'อ่างน้ำร้อน', icon: 'hotTub' },
-      { code: 'yard', label: 'ลานสนามหญ้า', icon: 'tree' },
-      { code: 'bbq', label: 'เตาบาร์บีคิว', icon: 'fire' },
-      { code: 'outdoor_dining', label: 'พื้นที่ทานข้าวกลางแจ้ง', icon: 'glassWater' },
-      { code: 'fire_pit', label: 'เตาไฟกลางแจ้ง', icon: 'fire' },
-      { code: 'pool_table', label: 'โต๊ะพูล', icon: 'pingPong' },
-      { code: 'table_tennis', label: 'โต๊ะปิงปอง', icon: 'pingPong' },
-      { code: 'snooker', label: 'โต๊ะสนุ๊ก', icon: 'pingPong' },
-      { code: 'foosball', label: 'โต๊ะบอล', icon: 'ball' },
-      { code: 'arcade', label: 'ตู้เกมส์', icon: 'gamepad' },
-      { code: 'fireplace', label: 'เตาผิงในบ้าน', icon: 'fire' },
+      { code: 'breakfast', label: 'อาหารเช้า', icon: 'coffee' },
+      // Kid / family entertainment ────────────────────────────────────────
+      { code: 'kid_zone', label: 'Kid Zone', icon: 'gamepad' },
+      { code: 'playground', label: 'สนามเด็กเล่น', icon: 'tents' },
+      { code: 'outdoor_activity', label: 'ลานกิจกรรมกลางแจ้ง', icon: 'tree' },
+      // Indoor games — all bundled into the "มุมสนุก/สันทนาการ" tile.
+      // Clicking opens a modal with per-table counters (5 tables) plus
+      // game consoles (Switch / PlayStation / Arcade) and notes.
+      { code: 'activity_table', label: 'มุมสนุก/สันทนาการ', icon: 'chalkboard' },
       { code: 'piano', label: 'เปียโน', icon: 'music' },
-      { code: 'gym', label: 'อุปกรณ์ออกกำลังกาย', icon: 'dumbbell' },
+      // Wellness ─────────────────────────────────────────────────────────
       { code: 'sauna', label: 'ซาวน่า', icon: 'spa' },
-      { code: 'lake_access', label: 'ติดทะเลสาบ/ทะเล', icon: 'water' },
-      { code: 'beach_access', label: 'ติดชายหาด', icon: 'beach' },
-      { code: 'waterfall_access', label: 'ติดน้ำตก', icon: 'water' },
-      { code: 'river_access', label: 'ติดแม่น้ำ', icon: 'water' },
+      { code: 'massage_spa', label: 'นวด/สปา', icon: 'spa' },
+      { code: 'onsen', label: 'ออนเซ็น', icon: 'hotTub' },
+      // Pets + entertainment add-ons moved from "สิ่งอำนวยความสะดวก" earlier.
       { code: 'pet_friendly', label: 'รับสัตว์เลี้ยง', icon: 'pet' },
+      { code: 'karaoke', label: 'คาราโอเกะ', icon: 'microphone' },
+      { code: 'smart_tv', label: 'Smart TV เชื่อมต่อลำโพง', icon: 'tv' },
     ],
   },
+  // "ข้อมูลที่ตั้ง" section moved to /[id]/area page (step 8) per design —
+  // views + nature adjacency belong with the map / coordinates / address card.
   {
     title: 'มีอุปกรณ์ความปลอดภัยอะไรบ้าง',
     amenities: [
@@ -72,7 +85,7 @@ const sections: Section[] = [
       { code: 'fire_ext', label: 'ถังดับเพลิง', icon: 'fireExt' },
       { code: 'first_aid', label: 'ชุดปฐมพยาบาล', icon: 'shelter' },
       { code: 'security_camera', label: 'กล้องวงจรปิด', icon: 'eye' },
-      { code: 'lock', label: 'ล็อคห้องนอน', icon: 'lock' },
+      // "ล็อคห้องนอน" (lock) removed per spec.
     ],
   },
 ]
@@ -82,6 +95,56 @@ const STORAGE_KEY = 'pms.newListing.amenities'
 const POOLS_STORAGE_KEY = 'pms.newListing.pools'
 const PET_POLICY_STORAGE_KEY = 'pms.newListing.petPolicy'
 const PARKING_STORAGE_KEY = 'pms.newListing.parking'
+const RECREATION_STORAGE_KEY = 'pms.newListing.recreation'
+const KITCHEN_EQUIPMENT_STORAGE_KEY = 'pms.newListing.kitchenEquipment'
+const SHOWER_AMENITIES_STORAGE_KEY = 'pms.newListing.showerAmenities'
+
+// ─── Shower amenities checklist ──────────────────────────────────────
+/** Items shown inside the "อุปกรณ์อาบน้ำ" modal. Owner ticks whichever the
+ *  property provides. Tile lights up if at least one item is selected. */
+const SHOWER_AMENITY_ITEMS: { code: string; label: string }[] = [
+  { code: 'soap',       label: 'สบู่' },
+  { code: 'shampoo',    label: 'แชมพู' },
+  { code: 'lotion',     label: 'โลชั่น' },
+  { code: 'body_towel', label: 'ผ้าเช็ดตัว' },
+  { code: 'hair_towel', label: 'ผ้าเช็ดผม' },
+  { code: 'bathrobe',   label: 'ชุดคลุมอาบน้ำ' },
+]
+
+// ─── Kitchen equipment checklist ─────────────────────────────────────
+/** Items shown inside the "อุปกรณ์ครัว" modal. Owner ticks whichever the
+ *  property provides. Tile lights up if at least one item is selected. */
+const KITCHEN_EQUIPMENT_ITEMS: { code: string; label: string }[] = [
+  { code: 'refrigerator',      label: 'ตู้เย็น' },
+  { code: 'coffee_maker',      label: 'เครื่องชงกาแฟ' },
+  { code: 'rice_cooker',       label: 'หม้อหุงข้าว' },
+  { code: 'microwave',         label: 'ไมโครเวฟ' },
+  { code: 'frying_pan',        label: 'กระทะ' },
+  { code: 'electric_kettle',   label: 'กาต้มน้ำไฟฟ้า' },
+  { code: 'toaster',           label: 'เครื่องปิ้งขนมปัง' },
+  { code: 'convection_oven',   label: 'หม้ออบลมร้อน' },
+  { code: 'oven',              label: 'ตู้อบ' },
+  { code: 'air_fryer',         label: 'หม้อทอดไร้น้ำมัน' },
+  { code: 'electric_stove',    label: 'เตาไฟฟ้า' },
+  { code: 'gas_stove',         label: 'เตาแก๊ส' },
+  { code: 'shabu_pot',         label: 'หม้อชาบู' },
+  { code: 'charcoal_grill',    label: 'เตาปิ้งย่างถ่าน (เตาหมูกะทะ)' },
+  { code: 'electric_grill',    label: 'เตาปิ้งย่างไฟฟ้า (เตาหมูกะทะ)' },
+  { code: 'plates',            label: 'จาน' },
+  { code: 'bowls',             label: 'ถ้วย' },
+  { code: 'cutlery',           label: 'ช้อน ส้อม' },
+  { code: 'knife_board',       label: 'มีด เขียง' },
+  { code: 'mortar_pestle',     label: 'ครกสาก' },
+  { code: 'spatula',           label: 'ตะหลิว' },
+  { code: 'ladle_dipper',      label: 'กระบวย' },
+  { code: 'rice_paddle',       label: 'ทัพพี' },
+  { code: 'water_glass',       label: 'แก้วน้ำดื่ม' },
+  { code: 'wine_glass',        label: 'แก้วไวน์' },
+  { code: 'shot_glass',        label: 'แก้วชอต' },
+  { code: 'coffee_mug',        label: 'แก้วกาแฟ' },
+  { code: 'fruit_knife',       label: 'มีดปอกผลไม้' },
+  { code: 'steamer',           label: 'หม้อนึ่ง' },
+]
 
 // ─── Parking details types ─────────────────────────────────────────────
 interface ParkingDetails {
@@ -97,6 +160,36 @@ interface ParkingDetails {
 
 function blankParking(): ParkingDetails {
   return { indoorSlots: 0, outdoorSlots: 0, projectSlots: 0, notes: '' }
+}
+
+// ─── Recreation (มุมสนุก/สันทนาการ) types ─────────────────────────────
+/** Count of each indoor game / console / arcade the property offers. Each row
+ *  is opt-in: 0 = not provided, ≥1 = number of units. Mirrors the parking
+ *  counter pattern. */
+interface RecreationCounts {
+  poolTable: number
+  tableTennis: number
+  snooker: number
+  foosball: number
+  airHockey: number
+  nintendoSwitch: number
+  playstation: number
+  arcade: number
+  simracing: number
+}
+
+function blankRecreation(): RecreationCounts {
+  return {
+    poolTable: 0,
+    tableTennis: 0,
+    snooker: 0,
+    foosball: 0,
+    airHockey: 0,
+    nintendoSwitch: 0,
+    playstation: 0,
+    arcade: 0,
+    simracing: 0,
+  }
 }
 
 // ─── Pet policy types ──────────────────────────────────────────────────
@@ -189,6 +282,18 @@ export default function ListingAmenitiesPage() {
   const [parkingModalOpen, setParkingModalOpen] = useState(false)
   const [parking, setParking] = useState<ParkingDetails>(blankParking())
 
+  // Recreation modal state — opened when user clicks the "มุมสนุก/สันทนาการ" tile
+  const [recreationModalOpen, setRecreationModalOpen] = useState(false)
+  const [recreation, setRecreation] = useState<RecreationCounts>(blankRecreation())
+
+  // Kitchen-equipment modal state — opened when user clicks the "อุปกรณ์ครัว" tile
+  const [kitchenEquipmentModalOpen, setKitchenEquipmentModalOpen] = useState(false)
+  const [kitchenEquipment, setKitchenEquipment] = useState<Set<string>>(new Set())
+
+  // Shower amenities modal state — opened when user clicks the "อุปกรณ์อาบน้ำ" tile
+  const [showerModalOpen, setShowerModalOpen] = useState(false)
+  const [showerAmenities, setShowerAmenities] = useState<Set<string>>(new Set())
+
   // Hydrate pool + pet policy details from sessionStorage on mount
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -230,6 +335,36 @@ export default function ListingAmenitiesPage() {
         /* malformed — ignore */
       }
     }
+    // Recreation
+    const recRaw = sessionStorage.getItem(RECREATION_STORAGE_KEY)
+    if (recRaw) {
+      try {
+        const parsed = JSON.parse(recRaw) as RecreationCounts
+        setRecreation({ ...blankRecreation(), ...parsed })
+      } catch {
+        /* malformed — ignore */
+      }
+    }
+    // Kitchen equipment
+    const keRaw = sessionStorage.getItem(KITCHEN_EQUIPMENT_STORAGE_KEY)
+    if (keRaw) {
+      try {
+        const parsed = JSON.parse(keRaw) as string[]
+        if (Array.isArray(parsed)) setKitchenEquipment(new Set(parsed))
+      } catch {
+        /* malformed — ignore */
+      }
+    }
+    // Shower amenities
+    const saRaw = sessionStorage.getItem(SHOWER_AMENITIES_STORAGE_KEY)
+    if (saRaw) {
+      try {
+        const parsed = JSON.parse(saRaw) as string[]
+        if (Array.isArray(parsed)) setShowerAmenities(new Set(parsed))
+      } catch {
+        /* malformed — ignore */
+      }
+    }
   }, [])
 
   function toggle(code: string) {
@@ -247,6 +382,23 @@ export default function ListingAmenitiesPage() {
     // Parking — clicking opens the parking details modal. Tile "selects" only after save.
     if (code === 'parking') {
       setParkingModalOpen(true)
+      return
+    }
+    // Recreation corner — clicking opens a modal with per-table counters
+    // (pool / table tennis / snooker / foosball / air hockey). The tile is
+    // "selected" only if at least one count is > 0 (saved on modal close).
+    if (code === 'activity_table') {
+      setRecreationModalOpen(true)
+      return
+    }
+    // Kitchen equipment — checklist modal. Tile selects when ≥1 item ticked.
+    if (code === 'kitchen_equipment') {
+      setKitchenEquipmentModalOpen(true)
+      return
+    }
+    // Shower amenities — checklist modal (soap / shampoo / lotion / towels / robe).
+    if (code === 'shower') {
+      setShowerModalOpen(true)
       return
     }
 
@@ -283,6 +435,30 @@ export default function ListingAmenitiesPage() {
         sessionStorage.setItem(PARKING_STORAGE_KEY, JSON.stringify(parking))
       } else {
         sessionStorage.removeItem(PARKING_STORAGE_KEY)
+      }
+      // Only save recreation if "activity_table" is selected
+      if (selected.has('activity_table')) {
+        sessionStorage.setItem(RECREATION_STORAGE_KEY, JSON.stringify(recreation))
+      } else {
+        sessionStorage.removeItem(RECREATION_STORAGE_KEY)
+      }
+      // Only save kitchen equipment list if "kitchen_equipment" is selected
+      if (selected.has('kitchen_equipment')) {
+        sessionStorage.setItem(
+          KITCHEN_EQUIPMENT_STORAGE_KEY,
+          JSON.stringify([...kitchenEquipment]),
+        )
+      } else {
+        sessionStorage.removeItem(KITCHEN_EQUIPMENT_STORAGE_KEY)
+      }
+      // Only save shower amenities list if "shower" is selected
+      if (selected.has('shower')) {
+        sessionStorage.setItem(
+          SHOWER_AMENITIES_STORAGE_KEY,
+          JSON.stringify([...showerAmenities]),
+        )
+      } else {
+        sessionStorage.removeItem(SHOWER_AMENITIES_STORAGE_KEY)
       }
     }
     router.push(target)
@@ -393,10 +569,92 @@ export default function ListingAmenitiesPage() {
     setParkingModalOpen(false)
   }
 
+  // ─── Recreation handlers ────────────────────────────────────────────
+  function updateRecreation(patch: Partial<RecreationCounts>) {
+    setRecreation((prev) => ({ ...prev, ...patch }))
+  }
+  function saveRecreation() {
+    // Meaningful if any table/console/arcade count > 0 or notes provided.
+    const meaningful =
+      recreation.poolTable > 0 ||
+      recreation.tableTennis > 0 ||
+      recreation.snooker > 0 ||
+      recreation.foosball > 0 ||
+      recreation.airHockey > 0 ||
+      recreation.nintendoSwitch > 0 ||
+      recreation.playstation > 0 ||
+      recreation.arcade > 0 ||
+      recreation.simracing > 0
+    if (meaningful) {
+      setSelected((prev) => new Set(prev).add('activity_table'))
+    } else {
+      setSelected((prev) => {
+        const next = new Set(prev)
+        next.delete('activity_table')
+        return next
+      })
+    }
+    setRecreationModalOpen(false)
+  }
+  function cancelRecreation() {
+    setRecreationModalOpen(false)
+  }
+
+  // ─── Kitchen-equipment handlers ─────────────────────────────────────
+  function toggleKitchenItem(code: string) {
+    setKitchenEquipment((prev) => {
+      const next = new Set(prev)
+      if (next.has(code)) next.delete(code)
+      else next.add(code)
+      return next
+    })
+  }
+  function saveKitchenEquipment() {
+    // Tile active iff at least one item is ticked.
+    if (kitchenEquipment.size > 0) {
+      setSelected((prev) => new Set(prev).add('kitchen_equipment'))
+    } else {
+      setSelected((prev) => {
+        const next = new Set(prev)
+        next.delete('kitchen_equipment')
+        return next
+      })
+    }
+    setKitchenEquipmentModalOpen(false)
+  }
+  function cancelKitchenEquipment() {
+    setKitchenEquipmentModalOpen(false)
+  }
+
+  // ─── Shower amenities handlers ──────────────────────────────────────
+  function toggleShowerItem(code: string) {
+    setShowerAmenities((prev) => {
+      const next = new Set(prev)
+      if (next.has(code)) next.delete(code)
+      else next.add(code)
+      return next
+    })
+  }
+  function saveShower() {
+    if (showerAmenities.size > 0) {
+      setSelected((prev) => new Set(prev).add('shower'))
+    } else {
+      setSelected((prev) => {
+        const next = new Set(prev)
+        next.delete('shower')
+        return next
+      })
+    }
+    setShowerModalOpen(false)
+  }
+  function cancelShower() {
+    setShowerModalOpen(false)
+  }
+
   return (
     <div className="mx-auto max-w-4xl pb-24">
       <Link
-        href={`/manage/listings/${id}/policies`}
+        href={`/manage/listings/${id}/details`}
         className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 transition-colors hover:text-brand-700"
       >
         <Icon name="chevronLeft" className="size-3.5" />
@@ -522,6 +780,44 @@ export default function ListingAmenitiesPage() {
           updateParking={updateParking}
           onSave={saveParking}
           onCancel={cancelParking}
+        />
+      )}
+
+      {/* Recreation (มุมสนุก/สันทนาการ) modal — per-table count picker */}
+      {recreationModalOpen && (
+        <RecreationModal
+          recreation={recreation}
+          updateRecreation={updateRecreation}
+          onSave={saveRecreation}
+          onCancel={cancelRecreation}
+        />
+      )}
+
+      {/* Kitchen equipment modal — multi-checkbox picker */}
+      {kitchenEquipmentModalOpen && (
+        <ChecklistModal
+          title="อุปกรณ์ครัว"
+          icon="toolbox"
+          items={KITCHEN_EQUIPMENT_ITEMS}
+          selected={kitchenEquipment}
+          onToggle={toggleKitchenItem}
+          onSave={saveKitchenEquipment}
+          onCancel={cancelKitchenEquipment}
+          subtitle="ติ๊กรายการอุปกรณ์ที่บ้านของท่านมี — เลือกได้หลายรายการพร้อมกัน"
+        />
+      )}
+
+      {/* Shower amenities modal — multi-checkbox picker */}
+      {showerModalOpen && (
+        <ChecklistModal
+          title="อุปกรณ์อาบน้ำ"
+          icon="shower"
+          items={SHOWER_AMENITY_ITEMS}
+          selected={showerAmenities}
+          onToggle={toggleShowerItem}
+          onSave={saveShower}
+          onCancel={cancelShower}
+          subtitle="ติ๊กของใช้ในห้องน้ำที่ที่พักของท่านจัดให้ — เลือกได้หลายรายการพร้อมกัน"
         />
       )}
     </div>
@@ -1110,6 +1406,287 @@ function ParkingCounterRow({
           <Icon name="plus" className="size-3" />
         </button>
         <span className="ml-1 text-xs text-gray-500">คัน</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Recreation (มุมสนุก/สันทนาการ) modal ────────────────────────────
+/** Modal opened when owner clicks the "มุมสนุก/สันทนาการ" tile.
+ *  Lets them pick how many of each game table they have — pool, table tennis,
+ *  snooker, foosball, air hockey — plus free-text notes. Mirrors ParkingModal. */
+interface RecreationModalProps {
+  recreation: RecreationCounts
+  updateRecreation: (patch: Partial<RecreationCounts>) => void
+  onSave: () => void
+  onCancel: () => void
+}
+
+function RecreationModal({
+  recreation,
+  updateRecreation,
+  onSave,
+  onCancel,
+}: RecreationModalProps) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="rec-modal-title"
+    >
+      <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-4 px-6 pb-3 pt-5">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+              <Icon name="chalkboard" className="size-4" />
+            </div>
+            <h2 id="rec-modal-title" className="text-lg font-bold text-gray-900">
+              มุมสนุก / สันทนาการ
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex size-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            aria-label="ปิด"
+          >
+            <Icon name="close" className="size-3.5" />
+          </button>
+        </div>
+
+        {/* Body — counter row per game table + free-text notes */}
+        <div className="flex-1 space-y-4 overflow-y-auto px-6 pb-6">
+          <p className="text-xs text-gray-500">
+            ระบุจำนวนของแต่ละโต๊ะ/เครื่อง (ปล่อย 0 = ไม่มี). เลือกได้หลายรายการพร้อมกัน.
+          </p>
+
+          <RecreationCounterRow
+            label="โต๊ะพูล"
+            value={recreation.poolTable}
+            onChange={(v) => updateRecreation({ poolTable: v })}
+          />
+          <RecreationCounterRow
+            label="โต๊ะปิงปอง"
+            value={recreation.tableTennis}
+            onChange={(v) => updateRecreation({ tableTennis: v })}
+          />
+          <RecreationCounterRow
+            label="โต๊ะสนุ๊ก"
+            value={recreation.snooker}
+            onChange={(v) => updateRecreation({ snooker: v })}
+          />
+          <RecreationCounterRow
+            label="โต๊ะบอล (โต๊ะฟุตซอลมือ)"
+            value={recreation.foosball}
+            onChange={(v) => updateRecreation({ foosball: v })}
+          />
+          <RecreationCounterRow
+            label="โต๊ะฮอกกี้"
+            value={recreation.airHockey}
+            onChange={(v) => updateRecreation({ airHockey: v })}
+          />
+
+          {/* Consoles + arcade — use "เครื่อง"/"ตู้" unit instead of "โต๊ะ" */}
+          <RecreationCounterRow
+            label="Nintendo Switch"
+            value={recreation.nintendoSwitch}
+            onChange={(v) => updateRecreation({ nintendoSwitch: v })}
+            unit="เครื่อง"
+          />
+          <RecreationCounterRow
+            label="Play Station"
+            value={recreation.playstation}
+            onChange={(v) => updateRecreation({ playstation: v })}
+            unit="เครื่อง"
+          />
+          <RecreationCounterRow
+            label="ตู้เกมส์ Arcade"
+            value={recreation.arcade}
+            onChange={(v) => updateRecreation({ arcade: v })}
+            unit="ตู้"
+          />
+          <RecreationCounterRow
+            label="Simracing (เกมส์แข่งรถ)"
+            value={recreation.simracing}
+            onChange={(v) => updateRecreation({ simracing: v })}
+            unit="ชุด"
+          />
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50/40 px-6 py-3">
+          <Button variant="secondary" type="button" onClick={onCancel}>
+            ยกเลิก
+          </Button>
+          <Button type="button" onClick={onSave}>
+            บันทึก
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Single counter row for a recreation item — shared shape with ParkingCounterRow.
+ *  `unit` defaults to "โต๊ะ" (suits the game-table rows); pass "เครื่อง" for
+ *  consoles + arcade so the trailing word is contextually correct. */
+function RecreationCounterRow({
+  label,
+  value,
+  onChange,
+  unit = 'โต๊ะ',
+}: {
+  label: string
+  value: number
+  onChange: (v: number) => void
+  unit?: string
+}) {
+  // 3-col grid keeps the counter cluster + unit text aligned across rows
+  // regardless of label length or unit word width — label flexes, counter
+  // column is auto-sized to its contents, unit column has a fixed width.
+  return (
+    <div className="grid grid-cols-[1fr_auto_3rem] items-center gap-3">
+      <div className="text-sm font-medium text-gray-800">{label}</div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(0, value - 1))}
+          className="flex size-8 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-40"
+          disabled={value <= 0}
+          aria-label="ลด"
+        >
+          <Icon name="minus" className="size-3" />
+        </button>
+        <input
+          type="number"
+          min={0}
+          value={value}
+          onChange={(e) => {
+            const n = Number(e.target.value)
+            if (Number.isNaN(n)) return
+            onChange(Math.max(0, Math.floor(n)))
+          }}
+          className="w-12 rounded-md border border-gray-300 px-2 py-1 text-center text-sm tabular-nums focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          aria-label={label}
+        />
+        <button
+          type="button"
+          onClick={() => onChange(value + 1)}
+          className="flex size-8 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition-colors hover:bg-gray-50"
+          aria-label="เพิ่ม"
+        >
+          <Icon name="plus" className="size-3" />
+        </button>
+      </div>
+      <span className="text-xs text-gray-500">{unit}</span>
+    </div>
+  )
+}
+
+// ─── Generic checklist modal ────────────────────────────────────────
+/** Reusable modal that shows a list of checkboxes — used by both the kitchen
+ *  equipment tile and the shower amenities tile. The outer tile lights up if
+ *  at least one item is checked. */
+interface ChecklistModalProps {
+  title: string
+  icon: IconName
+  subtitle?: string
+  items: { code: string; label: string }[]
+  selected: Set<string>
+  onToggle: (code: string) => void
+  onSave: () => void
+  onCancel: () => void
+}
+
+function ChecklistModal({
+  title,
+  icon,
+  subtitle,
+  items,
+  selected,
+  onToggle,
+  onSave,
+  onCancel,
+}: ChecklistModalProps) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-4 px-6 pb-3 pt-5">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+              <Icon name={icon} className="size-4" />
+            </div>
+            <h2 className="text-lg font-bold text-gray-900">{title}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex size-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            aria-label="ปิด"
+          >
+            <Icon name="close" className="size-3.5" />
+          </button>
+        </div>
+
+        {/* Body — 2-col checklist grid */}
+        <div className="flex-1 overflow-y-auto px-6 pb-6">
+          {subtitle && (
+            <p className="mb-3 text-xs text-gray-500">{subtitle}</p>
+          )}
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {items.map((item) => {
+              const active = selected.has(item.code)
+              return (
+                <label
+                  key={item.code}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 transition-colors',
+                    active
+                      ? 'border-brand-400 bg-brand-50/60'
+                      : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50',
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => onToggle(item.code)}
+                    className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                  />
+                  <span
+                    className={cn(
+                      'text-sm',
+                      active ? 'font-semibold text-brand-700' : 'text-gray-800',
+                    )}
+                  >
+                    {item.label}
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-2 border-t border-gray-100 bg-gray-50/40 px-6 py-3">
+          <div className="text-xs text-gray-500">
+            เลือกแล้ว <span className="font-bold text-brand-700">{selected.size}</span> / {items.length} รายการ
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" type="button" onClick={onCancel}>
+              ยกเลิก
+            </Button>
+            <Button type="button" onClick={onSave}>
+              บันทึก
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   )

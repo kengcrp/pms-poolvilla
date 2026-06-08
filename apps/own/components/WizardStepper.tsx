@@ -36,14 +36,14 @@ export interface WizardStep {
   href: (propertyId?: string) => string | null
 }
 
-// "สถานที่ใกล้เคียง" #4, "เสริมคนเข้าพัก" #5 — collect proximity + extra-guest
-// pricing early so amenity/photo choices have full context.
+// "เสริมคนเข้าพัก" #4, "สถานที่ใกล้เคียง" #5 — guest-pricing decisions come
+// before location detail so amenity/photo steps inherit full context.
 export const WIZARD_STEPS: WizardStep[] = [
   { num: 1,  label: 'ประเภทบ้าน',       slug: 'new',         href: () => '/manage/listings/new' },
   { num: 2,  label: 'ชื่อที่พัก',        slug: 'name',        href: () => '/manage/listings/new/name' },
   { num: 3,  label: 'ข้อมูลพื้นฐาน',    slug: 'form',        href: () => '/manage/listings/new/form' },
-  { num: 4,  label: 'สถานที่ใกล้เคียง',  slug: 'details',     href: (id) => (id ? `/manage/listings/${id}/details` : null) },
-  { num: 5,  label: 'เสริมคนเข้าพัก',   slug: 'policies',    href: (id) => (id ? `/manage/listings/${id}/policies` : null) },
+  { num: 4,  label: 'เสริมคนเข้าพัก',   slug: 'policies',    href: (id) => (id ? `/manage/listings/${id}/policies` : null) },
+  { num: 5,  label: 'สถานที่ใกล้เคียง',  slug: 'details',     href: (id) => (id ? `/manage/listings/${id}/details` : null) },
   { num: 6,  label: 'สิ่งอำนวยฯ',       slug: 'amenities',   href: (id) => (id ? `/manage/listings/${id}/amenities` : null) },
   { num: 7,  label: 'รูปภาพ',           slug: 'photos',      href: (id) => (id ? `/manage/listings/${id}/photos` : null) },
   { num: 8,  label: 'พื้นที่',           slug: 'area',        href: (id) => (id ? `/manage/listings/${id}/area` : null) },

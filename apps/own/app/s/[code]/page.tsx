@@ -21,7 +21,8 @@ interface DisplayProperty {
   slug: string
   code: string
   name: string
-  cover: string
+  /** Optional — empty string / null = no cover uploaded; UI shows a blank placeholder. */
+  cover: string | null
   pricePerNight: number
   bedrooms: number
   maxGuests: number
@@ -87,11 +88,14 @@ export default function SalePage({ params }: { params: Promise<{ code: string }>
   const isPending = ownerQuery.isPending || fallbackQuery.isPending
 
   // Resolve display data — owner-specific > fallback explore > mock
+  // Real-data mappers: do NOT substitute mock cover when the owner hasn't
+  // uploaded one — `null` is propagated so the UI renders an empty placeholder
+  // tile instead of someone else's stock photo.
   const realFromOwner = ownerQuery.data?.properties.map((p) => ({
     slug: p.code,
     code: p.code,
     name: (p.name as { th?: string })?.th ?? p.code,
-    cover: p.images[0]?.url ?? MOCK_PROPERTIES[0]!.cover,
+    cover: p.images[0]?.url ?? null,
     pricePerNight: 24000,
     bedrooms: p.variants[0]?.bedrooms ?? p.totalBedrooms,
     maxGuests: p.variants[0]?.maxGuests ?? 0,
@@ -102,7 +106,7 @@ export default function SalePage({ params }: { params: Promise<{ code: string }>
     slug: p.code,
     code: p.code,
     name: (p.name as { th?: string })?.th ?? p.code,
-    cover: p.images[0]?.url ?? MOCK_PROPERTIES[0]!.cover,
+    cover: p.images[0]?.url ?? null,
     pricePerNight: 24000,
     bedrooms: p.variants[0]?.bedrooms ?? p.totalBedrooms,
     maxGuests: p.variants[0]?.maxGuests ?? 0,
@@ -124,7 +128,7 @@ export default function SalePage({ params }: { params: Promise<{ code: string }>
   return (
     <div className="min-h-screen bg-[#fafafa] text-gray-900">
       <ShopHeader logoText={ownerName} />
-      <HeroBanner cover={displayProperties[0]?.cover ?? MOCK_PROPERTIES[0]!.cover} />
+      <HeroBanner cover={displayProperties[0]?.cover ?? null} />
       <SearchCard />
 
       <main className="mx-auto max-w-6xl px-4 pb-16 pt-8">
@@ -184,12 +188,21 @@ function ShopHeader({ logoText }: { logoText: string }) {
 
 // ─── Hero banner ───────────────────────────────────────────────────────
 
-function HeroBanner({ cover }: { cover: string }) {
+function HeroBanner({ cover }: { cover: string | null }) {
   return (
-    <div className="relative h-56 w-full overflow-hidden sm:h-72 md:h-80">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={cover} alt="banner" className="size-full object-cover" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+    <div className="relative h-56 w-full overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 sm:h-72 md:h-80">
+      {cover ? (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={cover} alt="banner" className="size-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+        </>
+      ) : (
+        // Blank placeholder — soft gradient backdrop, no fallback image.
+        <div className="flex size-full items-center justify-center text-gray-300">
+          <Icon name="image" className="size-12" />
+        </div>
+      )}
     </div>
   )
 }
@@ -236,13 +249,20 @@ function PropertyCard({ property, code }: { property: DisplayProperty; code: str
       href={`/s/${code}/${property.slug}`}
       className="group flex flex-col overflow-hidden rounded-2xl bg-white shadow-[0_10px_40px_rgba(0,0,0,0.06)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(0,0,0,0.12)]"
     >
-      <div className="relative h-44 w-full overflow-hidden">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={property.cover}
-          alt={property.name}
-          className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
+      <div className="relative h-44 w-full overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200">
+        {property.cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={property.cover}
+            alt={property.name}
+            className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : (
+          // Blank placeholder — no image, no stock substitute.
+          <div className="flex size-full items-center justify-center text-gray-300">
+            <Icon name="image" className="size-10" />
+          </div>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col p-3">

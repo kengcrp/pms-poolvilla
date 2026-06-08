@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { trpc } from '@/lib/trpc'
-import { Button, Icon, Input, Label, Modal, ModalBody, ModalFooter, NumberInput, cn } from '@pms/ui'
+import { Button, Icon, Label, Modal, ModalBody, ModalFooter, NumberInput, cn } from '@pms/ui'
+import { ThaiDatePicker } from './ThaiDatePicker'
 
 interface Props {
   open: boolean
@@ -22,6 +23,28 @@ interface Row {
   includedGuests: number
   /** Per-extra-guest fee. 0 = ไม่คิดค่าท่านเพิ่ม */
   extraGuestFee: number
+}
+
+/** Date scope for a rate plan (empty strings = no scope / applies always). */
+type DateRange = { startDate: string; endDate: string }
+
+/** Enumerate every UTC midnight Date in [start, end] (inclusive). */
+function enumerateDates(startYmd: string, endYmd: string): Date[] {
+  if (!startYmd || !endYmd || startYmd > endYmd) return []
+  const out: Date[] = []
+  const cur = new Date(startYmd + 'T00:00:00Z')
+  const end = new Date(endYmd + 'T00:00:00Z')
+  while (cur <= end) {
+    out.push(new Date(cur))
+    cur.setUTCDate(cur.getUTCDate() + 1)
+  }
+  return out
+}
+function toYmd(d: Date): string {
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(d.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
 }
 
 /**
@@ -49,6 +72,21 @@ export function PropertyWeeklyPricingModal({ open, onClose, propertyId }: Props)
   const [bookingWindow, setBookingWindow] = useState<number | null>(null)
   const [bookingWindowOpen, setBookingWindowOpen] = useState(false)
 
+  // Effective period for the BASE rate plan — owner can scope these rates to
+  // a specific date range. Sessionstorage-persisted per property.
+  const [priceStartDate, setPriceStartDate] = useState('')
+  const [priceEndDate, setPriceEndDate] = useState('')
+
+  // ── Plan 2 (extra rate plan) ────────────────────────────────────
+  // Owners can define a second rate plan with its own date range + 7 DOW prices.
+  // On save the rows are written as per-day overrides via setDayOverride so the
+  // calendar reflects them without a schema change. Both rows and the date
+  // range are persisted client-side (sessionStorage per variant) since the DB
+  // only stores one canonical weekly price set per variant.
+  const [activePlanByVariant, setActivePlanByVariant] = useState<Record<string, 0 | 1>>({})
+  const [plan2RowsByVariant, setPlan2RowsByVariant] = useState<Record<string, Row[]>>({})
+  const [plan2RangeByVariant, setPlan2RangeByVariant] = useState<Record<string, DateRange>>({})
+
   // Hydrate state from API on load. Re-runs when modal opens or property updates.
   useEffect(() => {
     if (!open || !property) return
@@ -73,6 +111,42 @@ export function PropertyWeeklyPricingModal({ open, onClose, propertyId }: Props)
     setRowsByVariant(rows)
     setGuestsByVariant(guests)
     setBookingWindow(property.bookingWindowMonths ?? null)
+
+    // Hydrate plan 2 per variant — rows seed from plan 1, ranges from storage.
+    const plan2Rows: Record<string, Row[]> = {}
+    const plan2Range: Record<string, DateRange> = {}
+    const activePlanInit: Record<string, 0 | 1> = {}
+    for (const v of property.variants) {
+      // Seed plan 2 rows by copying plan 1 — owner usually starts from there.
+      plan2Rows[v.id] = rows[v.id]!.map((r) => ({ ...r }))
+      plan2Range[v.id] = { startDate: '', endDate: '' }
+      activePlanInit[v.id] = 0
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = sessionStorage.getItem(`pms.weeklyPricing.plan2:${v.id}`)
+          if (raw) {
+            const parsed = JSON.parse(raw) as {
+              rows?: Row[]
+              startDate?: string
+              endDate?: string
+            }
+            if (Array.isArray(parsed.rows) && parsed.rows.length === 7) {
+              plan2Rows[v.id] = parsed.rows
+            }
+            plan2Range[v.id] = {
+              startDate: parsed.startDate ?? '',
+              endDate: parsed.endDate ?? '',
+            }
+          }
+        } catch {
+          /* malformed — ignore */
+        }
+      }
+    }
+    setPlan2RowsByVariant(plan2Rows)
+    setPlan2RangeByVariant(plan2Range)
+    setActivePlanByVariant(activePlanInit)
+
     // Default-select the default variant on first hydration
     if (!activeVariantId || !property.variants.some((v) => v.id === activeVariantId)) {
       const def = property.variants.find((v) => v.isDefault)
@@ -80,6 +154,25 @@ export function PropertyWeeklyPricingModal({ open, onClose, propertyId }: Props)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, property])
+
+  // Persist plan 2 (rows + range) per variant on every change.
+  useEffect(() => {
+    if (!open || typeof window === 'undefined') return
+    for (const vid of Object.keys(plan2RowsByVariant)) {
+      try {
+        sessionStorage.setItem(
+          `pms.weeklyPricing.plan2:${vid}`,
+          JSON.stringify({
+            rows: plan2RowsByVariant[vid],
+            startDate: plan2RangeByVariant[vid]?.startDate ?? '',
+            endDate: plan2RangeByVariant[vid]?.endDate ?? '',
+          }),
+        )
+      } catch {
+        /* quota / disabled — ignore */
+      }
+    }
+  }, [open, plan2RowsByVariant, plan2RangeByVariant])
 
   // Reset selection AND collapse the booking-window dropdown whenever the modal closes,
   // so reopening it always shows the default state (dropdown collapsed).
@@ -90,13 +183,46 @@ export function PropertyWeeklyPricingModal({ open, onClose, propertyId }: Props)
     }
   }, [open])
 
+  // Hydrate the price-period draft from sessionStorage when the modal opens
+  // for a property. Keyed per-property so different listings don't collide.
+  useEffect(() => {
+    if (!open || !propertyId) return
+    if (typeof window === 'undefined') return
+    try {
+      const raw = sessionStorage.getItem(`pms.weeklyPricing.period:${propertyId}`)
+      if (!raw) {
+        setPriceStartDate('')
+        setPriceEndDate('')
+        return
+      }
+      const parsed = JSON.parse(raw) as { start?: string; end?: string }
+      setPriceStartDate(parsed.start ?? '')
+      setPriceEndDate(parsed.end ?? '')
+    } catch {
+      /* malformed — ignore */
+    }
+  }, [open, propertyId])
+
+  // Persist the period draft whenever it changes so refresh / re-open keeps it.
+  useEffect(() => {
+    if (!open || !propertyId) return
+    if (typeof window === 'undefined') return
+    sessionStorage.setItem(
+      `pms.weeklyPricing.period:${propertyId}`,
+      JSON.stringify({ start: priceStartDate, end: priceEndDate }),
+    )
+  }, [open, propertyId, priceStartDate, priceEndDate])
+
   const upsert = trpc.pricing.upsertWeekly.useMutation()
+  const setDayOverride = trpc.pricing.setDayOverride.useMutation()
   const updateVariant = trpc.variant.update.useMutation()
   const updateProperty = trpc.property.update.useMutation()
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   async function handleSave() {
     if (!property) return
+    setSaveError(null)
     setSaving(true)
     try {
       const tasks: Promise<unknown>[] = []
@@ -122,6 +248,39 @@ export function PropertyWeeklyPricingModal({ open, onClose, propertyId }: Props)
         if (typeof maxGuests === 'number' && maxGuests !== v.maxGuests) {
           tasks.push(updateVariant.mutateAsync({ id: v.id, maxGuests }))
         }
+        // Plan 2 (extra rate plan) — only takes effect when both dates are
+        // set. Each day in range gets a per-day override with the matching DOW
+        // row. DOW-aware so the extra plan can vary weekday vs weekend.
+        const p2Rows = plan2RowsByVariant[v.id]
+        const p2Range = plan2RangeByVariant[v.id]
+        if (
+          p2Rows &&
+          p2Range?.startDate &&
+          p2Range?.endDate &&
+          p2Range.startDate <= p2Range.endDate
+        ) {
+          for (const day of enumerateDates(p2Range.startDate, p2Range.endDate)) {
+            const dow = day.getUTCDay()
+            const r = p2Rows[dow]
+            if (!r) continue
+            const next = new Date(day)
+            next.setUTCDate(next.getUTCDate() + 1)
+            tasks.push(
+              setDayOverride.mutateAsync({
+                variantId: v.id,
+                checkin: toYmd(day),
+                checkout: toYmd(next),
+                price: r.price,
+                agentPrice: partnerListing ? (r.agentPrice || null) : null,
+                priceType: null,
+                originalPrice: null,
+                originalAgentPrice: null,
+                note: 'ราคาซีซัน',
+                minStay: r.minStay > 1 ? r.minStay : null,
+              }),
+            )
+          }
+        }
       }
       // Property-level: booking window
       if (bookingWindow !== (property.bookingWindowMonths ?? null)) {
@@ -133,12 +292,65 @@ export function PropertyWeeklyPricingModal({ open, onClose, propertyId }: Props)
       utils.property.list.invalidate()
       utils.property.byId.invalidate()
       onClose()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ'
+      setSaveError(msg)
     } finally {
       setSaving(false)
     }
   }
 
-  const activeRows = activeVariantId ? rowsByVariant[activeVariantId] : undefined
+  // Which rate plan tab is active for the current variant (0 = base, 1 = extra).
+  const activePlanIdx: 0 | 1 = activeVariantId
+    ? (activePlanByVariant[activeVariantId] ?? 0)
+    : 0
+  // The currently-displayed rows + date range depend on which plan tab is on.
+  const activeRows =
+    activeVariantId
+      ? activePlanIdx === 0
+        ? rowsByVariant[activeVariantId]
+        : plan2RowsByVariant[activeVariantId]
+      : undefined
+  const activeRange: DateRange = (() => {
+    if (!activeVariantId) return { startDate: '', endDate: '' }
+    if (activePlanIdx === 0) return { startDate: priceStartDate, endDate: priceEndDate }
+    return plan2RangeByVariant[activeVariantId] ?? { startDate: '', endDate: '' }
+  })()
+  const setActiveRangeStart = (v: string) => {
+    if (!activeVariantId) return
+    if (activePlanIdx === 0) setPriceStartDate(v)
+    else
+      setPlan2RangeByVariant((prev) => ({
+        ...prev,
+        [activeVariantId]: {
+          startDate: v,
+          endDate: prev[activeVariantId]?.endDate ?? '',
+        },
+      }))
+  }
+  const setActiveRangeEnd = (v: string) => {
+    if (!activeVariantId) return
+    if (activePlanIdx === 0) setPriceEndDate(v)
+    else
+      setPlan2RangeByVariant((prev) => ({
+        ...prev,
+        [activeVariantId]: {
+          startDate: prev[activeVariantId]?.startDate ?? '',
+          endDate: v,
+        },
+      }))
+  }
+  /** Write a partial Row update to the active plan's rows for a given DOW. */
+  const updateActiveRow = (dow: number, patch: Partial<Row>) => {
+    if (!activeVariantId) return
+    const setter = activePlanIdx === 0 ? setRowsByVariant : setPlan2RowsByVariant
+    setter((prev) => ({
+      ...prev,
+      [activeVariantId]: (prev[activeVariantId] ?? []).map((r, i) =>
+        i === dow ? { ...r, ...patch } : r,
+      ),
+    }))
+  }
   const activeMaxGuests = activeVariantId ? guestsByVariant[activeVariantId] : undefined
   const activeVariant = variants.find((v) => v.id === activeVariantId)
   // "แบ่งห้อง" toggle column only makes sense for split variants — เหมาหลัง IS the whole house.
@@ -160,96 +372,125 @@ export function PropertyWeeklyPricingModal({ open, onClose, propertyId }: Props)
           <div className="flex justify-center py-8 text-sm text-gray-500">กำลังโหลด...</div>
         ) : (
           <div className="space-y-5">
-            {/* Variant tabs — simple pill row (shrinks to content) */}
-            <div className="overflow-x-auto">
-              <div className="inline-flex gap-1 rounded-xl bg-gray-100 p-1">
-                {variants.map((v) => {
-                  const vName = (v.name as { th?: string })?.th ?? `${v.bedrooms} ห้องนอน`
-                  const isActive = activeVariantId === v.id
+            {/* ── เรท tab pill — switches between ราคาพื้นฐาน (DB-backed) and
+                ราคาซีซัน (sessionStorage + per-day overrides on save). Pinned
+                at the very top so the owner picks which plan they're editing
+                BEFORE touching dates / prices. */}
+            {activeVariantId && (
+              <div className="inline-flex rounded-full bg-gray-100 p-1">
+                {(
+                  [
+                    { idx: 0, label: 'ราคาพื้นฐาน' },
+                    { idx: 1, label: 'ราคาซีซัน' },
+                  ] as const
+                ).map(({ idx, label }) => {
+                  const isActive = activePlanIdx === idx
                   return (
                     <button
-                      key={v.id}
+                      key={idx}
                       type="button"
-                      onClick={() => setActiveVariantId(v.id)}
+                      onClick={() =>
+                        setActivePlanByVariant((prev) => ({
+                          ...prev,
+                          [activeVariantId]: idx,
+                        }))
+                      }
                       className={cn(
-                        'whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold transition-all',
+                        'whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-semibold transition-all',
                         isActive
-                          ? v.isDefault
-                            ? 'bg-white text-brand-700 shadow-sm ring-1 ring-brand-100'
-                            : 'bg-white text-red-600 shadow-sm ring-1 ring-red-100'
+                          ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/30'
                           : 'text-gray-600 hover:text-gray-900',
                       )}
                     >
-                      <span className="inline-flex items-center gap-1.5">
-                        <Icon name={v.isDefault ? 'home' : 'bed'} className="size-3.5" />
-                        {vName}
-                      </span>
+                      {label}
                     </button>
                   )
                 })}
               </div>
-            </div>
+            )}
 
-            {/* Guest capacity & extra-guest pricing
-                - รองรับสูงสุด = absolute max (PropertyVariant.maxGuests)
-                - รวมในราคา   = guests included in base price (VariantWeeklyPricing.includedGuests, written to all 7 DOWs)
-                - ค่าท่านเพิ่ม = fee per guest above รวมในราคา (VariantWeeklyPricing.extraGuestFee) */}
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
-                <Icon name="users" className="size-3.5 text-gray-500" />
-                จำนวนผู้เข้าพัก
+            {/* ── ช่วงวันที่ใช้ราคานี้ — only relevant for ราคาซีซัน. ราคาพื้นฐาน
+                applies whenever no season covers a day, so no date scope is
+                needed on that tab. */}
+            {activePlanIdx === 1 && (
+              <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <div className="border-b border-gray-100 bg-gray-50/40 px-4 py-3">
+                  <div className="text-sm font-semibold text-gray-900">
+                    ช่วงวันที่ใช้ราคานี้
+                    <span className="ml-2 text-[11px] font-medium text-red-600">จำเป็น</span>
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-gray-500">
+                    ราคาซีซันจะใช้แทนราคาพื้นฐานในช่วงวันที่กำหนด
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
+                  <div>
+                    <Label>วันที่เริ่มต้น</Label>
+                    <ThaiDatePicker
+                      value={activeRange.startDate}
+                      onChange={setActiveRangeStart}
+                      placeholder="เลือกวันเริ่มต้น"
+                    />
+                  </div>
+                  <div>
+                    <Label>วันที่สิ้นสุด</Label>
+                    <ThaiDatePicker
+                      value={activeRange.endDate}
+                      onChange={setActiveRangeEnd}
+                      min={activeRange.startDate || undefined}
+                      placeholder="เลือกวันสิ้นสุด"
+                    />
+                  </div>
+                </div>
+                {activeRange.startDate &&
+                  activeRange.endDate &&
+                  activeRange.startDate > activeRange.endDate && (
+                    <div className="border-t border-amber-100 bg-amber-50/60 px-4 py-2 text-[11px] text-amber-700">
+                      ⚠️ วันที่สิ้นสุดต้องอยู่หลังวันที่เริ่มต้น
+                    </div>
+                  )}
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div>
-                  <Label>รองรับสูงสุด (ท่าน)</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={activeMaxGuests ?? 1}
-                    onChange={(e) =>
-                      setGuestsByVariant((prev) => ({
-                        ...prev,
-                        [activeVariantId]: Math.max(1, Number(e.target.value || 1)),
-                      }))
-                    }
-                  />
-                  <p className="mt-1 text-[10.5px] text-gray-500">เพดานสูงสุดที่บ้านรับได้</p>
-                </div>
-                <div>
-                  <Label>รวมในราคา (ท่าน)</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={activeMaxGuests ?? 100}
-                    value={activeRows?.[0]?.includedGuests ?? activeMaxGuests ?? 1}
-                    onChange={(e) => {
-                      const inc = Math.max(1, Number(e.target.value || 1))
-                      // Write the same value to all 7 DOW rows so the weekly form keeps a single source
-                      setRowsByVariant((prev) => ({
-                        ...prev,
-                        [activeVariantId]: (prev[activeVariantId] ?? []).map((r) => ({ ...r, includedGuests: inc })),
-                      }))
-                    }}
-                  />
-                  <p className="mt-1 text-[10.5px] text-gray-500">จำนวนท่านที่ราคาขายครอบคลุม</p>
-                </div>
-                <div>
-                  <Label>ค่าท่านเพิ่ม / ท่าน (฿)</Label>
-                  <NumberInput
-                    value={activeRows?.[0]?.extraGuestFee ?? 0}
-                    placeholder="0"
-                    onChange={(v) => {
-                      setRowsByVariant((prev) => ({
-                        ...prev,
-                        [activeVariantId]: (prev[activeVariantId] ?? []).map((r) => ({ ...r, extraGuestFee: v })),
-                      }))
-                    }}
-                  />
-                  <p className="mt-1 text-[10.5px] text-gray-500">คิดเพิ่มเฉพาะท่านที่เกิน "รวมในราคา"</p>
+            )}
+
+            {/* Variant tabs — only render when the property actually has more
+                than one variant (i.e. owner enabled แบ่งห้องนอน). Single-variant
+                properties just show the lone เหมาหลัง rate table without the
+                noisy tab row. */}
+            {variants.length > 1 && (
+              <div className="overflow-x-auto">
+                <div className="inline-flex gap-1 rounded-xl bg-gray-100 p-1">
+                  {variants.map((v) => {
+                    const vName = (v.name as { th?: string })?.th ?? `${v.bedrooms} ห้องนอน`
+                    const isActive = activeVariantId === v.id
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setActiveVariantId(v.id)}
+                        className={cn(
+                          'whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold transition-all',
+                          isActive
+                            ? v.isDefault
+                              ? 'bg-white text-brand-700 shadow-sm ring-1 ring-brand-100'
+                              : 'bg-white text-red-600 shadow-sm ring-1 ring-red-100'
+                            : 'text-gray-600 hover:text-gray-900',
+                        )}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Icon name={v.isDefault ? 'home' : 'bed'} className="size-3.5" />
+                          {vName}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Guest capacity card removed per UX request. The variant's
+                maxGuests / includedGuests / extraGuestFee still persist
+                whatever value was last saved — handleSave writes the existing
+                form values back untouched, no data loss. */}
 
             {/* Per-day grid */}
             <div className="overflow-hidden rounded-xl border border-gray-200">
@@ -288,14 +529,7 @@ export function PropertyWeeklyPricingModal({ open, onClose, propertyId }: Props)
                       <NumberInput
                         value={row.price}
                         className="bg-white text-center font-medium"
-                        onChange={(v) => {
-                          setRowsByVariant((prev) => ({
-                            ...prev,
-                            [activeVariantId]: (prev[activeVariantId] ?? []).map((r, i) =>
-                              i === dow ? { ...r, price: v } : r,
-                            ),
-                          }))
-                        }}
+                        onChange={(v) => updateActiveRow(dow, { price: v })}
                       />
                     )}
 
@@ -309,14 +543,7 @@ export function PropertyWeeklyPricingModal({ open, onClose, propertyId }: Props)
                           value={row.agentPrice}
                           className="bg-white text-center font-medium"
                           placeholder="—"
-                          onChange={(v) => {
-                            setRowsByVariant((prev) => ({
-                              ...prev,
-                              [activeVariantId]: (prev[activeVariantId] ?? []).map((r, i) =>
-                                i === dow ? { ...r, agentPrice: v } : r,
-                              ),
-                            }))
-                          }}
+                          onChange={(v) => updateActiveRow(dow, { agentPrice: v })}
                         />
                       )
                     )}
@@ -324,14 +551,7 @@ export function PropertyWeeklyPricingModal({ open, onClose, propertyId }: Props)
                     {showSplitCol && (
                       <button
                         type="button"
-                        onClick={() =>
-                          setRowsByVariant((prev) => ({
-                            ...prev,
-                            [activeVariantId]: (prev[activeVariantId] ?? []).map((r, i) =>
-                              i === dow ? { ...r, splitOpen: !r.splitOpen } : r,
-                            ),
-                          }))
-                        }
+                        onClick={() => updateActiveRow(dow, { splitOpen: !row.splitOpen })}
                         className={cn(
                           'group inline-flex h-9 w-full items-center justify-between rounded-full px-3 text-xs font-semibold shadow-sm transition-colors',
                           row.splitOpen
@@ -426,13 +646,19 @@ export function PropertyWeeklyPricingModal({ open, onClose, propertyId }: Props)
         )}
       </ModalBody>
       <ModalFooter>
+        {saveError && (
+          <div className="mr-auto rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
+            {saveError}
+          </div>
+        )}
         <Button variant="secondary" onClick={onClose}>
           ยกเลิก
         </Button>
-        <Button onClick={handleSave} disabled={saving || isPending}>
+        <Button onClick={handleSave} disabled={saving || !property}>
           {saving ? 'กำลังบันทึก...' : 'บันทึกทั้งหมด'}
         </Button>
       </ModalFooter>
     </Modal>
   )
 }
+
