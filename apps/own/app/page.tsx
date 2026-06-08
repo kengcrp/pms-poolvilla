@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 
 export default function Home() {
-  redirect('/manage/dashboard')
+  // Landing target — calendar (dashboard is feature-locked for now).
+  redirect('/manage/calendar')
 }

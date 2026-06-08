@@ -23,7 +23,8 @@ function LoginForm() {
       setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง')
       return
     }
-    router.push(search.get('callbackUrl') ?? '/manage/dashboard')
+    // Land on calendar (dashboard is feature-locked for now).
+    router.push(search.get('callbackUrl') ?? '/manage/calendar')
     router.refresh()
   }
 

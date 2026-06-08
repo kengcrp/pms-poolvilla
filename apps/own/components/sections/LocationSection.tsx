@@ -222,87 +222,9 @@ export function LocationSection({ propertyId, afterFirstCard }: Props) {
         </div>
       </LocationCard>
 
-      {/* Optional slot — caller can drop extra content right under the first
-          card (e.g. the area-step's location-amenity tile grid). */}
-      {afterFirstCard}
-
-      {/* Card 2: Google Maps + coordinates */}
-      <LocationCard title="พิกัด" desc="วางลิงก์ Google Maps แล้วระบบจะดึงพิกัดให้อัตโนมัติ">
-        <div>
-          <Label>ลิงก์ Google Map</Label>
-          <div className="flex gap-2">
-            <Input
-              value={form.gmapUrl}
-              onChange={(e) => setForm({ ...form, gmapUrl: e.target.value })}
-              placeholder="https://maps.app.goo.gl/... หรือ https://maps.google.com/..."
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={detectFromGmap}
-              disabled={!form.gmapUrl || resolveGmap.isPending}
-            >
-              {resolveGmap.isPending ? 'กำลังดึง...' : 'ดึงพิกัด'}
-            </Button>
-          </div>
-          <p className="mt-1 text-[11px] text-gray-500">
-            รองรับลิงก์ย่อจาก Google Maps (maps.app.goo.gl) — หากดึงไม่สำเร็จ
-            กรอกละติจูด/ลองจิจูดเองได้ด้านล่าง
-          </p>
-          {/* Inline status — sits right under the URL input so users get
-              instant feedback after clicking "ดึงพิกัด" instead of having
-              to scroll to find an error banner. */}
-          {gmapStatus === 'ok' && gmapMessage && (
-            <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
-              <span aria-hidden>✓</span>
-              {gmapMessage}
-            </div>
-          )}
-          {gmapStatus === 'error' && gmapMessage && (
-            <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-200">
-              <span aria-hidden>⚠</span>
-              {gmapMessage}
-            </div>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label required>ละติจูด</Label>
-            <Input
-              type="number"
-              step="0.0000001"
-              value={form.lat}
-              onChange={(e) => setForm({ ...form, lat: e.target.value })}
-              placeholder="13.7563"
-            />
-          </div>
-          <div>
-            <Label required>ลองจิจูด</Label>
-            <Input
-              type="number"
-              step="0.0000001"
-              value={form.lng}
-              onChange={(e) => setForm({ ...form, lng: e.target.value })}
-              placeholder="100.5018"
-            />
-          </div>
-        </div>
-      </LocationCard>
-
-      {/* Card 3: address */}
-      <LocationCard title="ที่อยู่" desc="ที่อยู่จัดส่ง / ที่อยู่เต็มของที่พัก">
-        <div>
-          <Label required>ที่อยู่</Label>
-          <Textarea
-            rows={3}
-            value={form.address}
-            onChange={(e) => setForm({ ...form, address: e.target.value })}
-            placeholder="บ้านเลขที่, หมู่, ตำบล, อำเภอ..."
-          />
-        </div>
-      </LocationCard>
-
-      {/* Card 4: distance (optional) */}
+      {/* Distance card — moved up here per UX request so it sits ABOVE the
+          "บรรยากาศ" tile grid (afterFirstCard slot). Owners see distance →
+          atmosphere → coords → address as a logical top-to-bottom flow. */}
       <LocationCard
         title="ระยะทางจากทะเล/น้ำตก"
         desc="ระบุระยะทางจากแหล่งน้ำเด่น เพื่อให้แขกเห็นจุดขาย"
@@ -343,6 +265,69 @@ export function LocationSection({ propertyId, afterFirstCard }: Props) {
           </div>
         </div>
       </LocationCard>
+
+      {/* Optional slot — caller can drop extra content right under the first
+          card (e.g. the area-step's location-amenity tile grid). */}
+      {afterFirstCard}
+
+      {/* Card 2: Google Maps + coordinates */}
+      <LocationCard title="พิกัด" desc="วางลิงก์ Google Maps แล้วระบบจะดึงพิกัดให้อัตโนมัติ">
+        <div>
+          <Label>ลิงก์ Google Map</Label>
+          <div className="flex gap-2">
+            <Input
+              value={form.gmapUrl}
+              onChange={(e) => setForm({ ...form, gmapUrl: e.target.value })}
+              placeholder="https://maps.app.goo.gl/... หรือ https://maps.google.com/..."
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={detectFromGmap}
+              disabled={!form.gmapUrl || resolveGmap.isPending}
+            >
+              {resolveGmap.isPending ? 'กำลังดึง...' : 'ดึงพิกัด'}
+            </Button>
+          </div>
+          <p className="mt-1 text-[11px] text-gray-500">
+            รองรับลิงก์ย่อจาก Google Maps (maps.app.goo.gl)
+          </p>
+          {/* Inline status — sits right under the URL input so users get
+              instant feedback after clicking "ดึงพิกัด" instead of having
+              to scroll to find an error banner. */}
+          {gmapStatus === 'ok' && gmapMessage && (
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
+              <span aria-hidden>✓</span>
+              {gmapMessage}
+            </div>
+          )}
+          {gmapStatus === 'error' && gmapMessage && (
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-200">
+              <span aria-hidden>⚠</span>
+              {gmapMessage}
+            </div>
+          )}
+        </div>
+        {/* Lat / lng inputs are hidden from the UI per UX request — the values
+            are still set by the "ดึงพิกัด" button (and read on the public
+            SalePage map). Owners no longer have to look at the raw numbers. */}
+      </LocationCard>
+
+      {/* Card 3: address */}
+      <LocationCard title="ที่อยู่" desc="ที่อยู่จัดส่ง / ที่อยู่เต็มของที่พัก">
+        <div>
+          <Label required>ที่อยู่</Label>
+          <Textarea
+            rows={3}
+            value={form.address}
+            onChange={(e) => setForm({ ...form, address: e.target.value })}
+            placeholder="บ้านเลขที่, หมู่, ตำบล, อำเภอ..."
+          />
+        </div>
+      </LocationCard>
+
+      {/* (Card 4: distance card was moved above the บรรยากาศ tiles — no
+          duplicate render here.) */}
 
       {error && (
         <div className="rounded-lg bg-red-50 px-3.5 py-2.5 text-sm text-red-700 ring-1 ring-inset ring-red-200">

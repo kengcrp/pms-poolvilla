@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Icon, type IconName, cn } from '@pms/ui'
+import { clearWizardDrafts } from '@/lib/wizard-drafts'
 import { WizardStepper } from '@/components/WizardStepper'
 
 /** Custom outline-house SVG (matches the design mockup) — used by the "บ้าน" tile. */
@@ -129,15 +130,20 @@ interface PropertyType {
   /** Optional intermediate wizard route — e.g. residential opens the booking-mode
    *  question step before the form. */
   nextHref?: string
+  /** When true, the tile renders greyed-out + non-clickable with a "เร็วๆ นี้"
+   *  badge — used for property types that aren't supported yet. */
+  comingSoon?: boolean
 }
 
 /** Curated list of property types shown as a compact icon grid. Each tile links to
  *  the form with an appropriate preset. */
 const propertyTypes: PropertyType[] = [
-  { key: 'house', label: 'บ้าน', iconSvg: OutlineHouseIcon, formType: 'POOL_VILLA', nextHref: '/manage/listings/new/residential' },
-  { key: 'hotel', label: 'โรงแรม', iconSvg: OutlineHotelIcon, formType: 'BNB' },
-  { key: 'camp', label: 'แคมป์', iconSvg: OutlineCampIcon, formType: 'LOFT' },
-  { key: 'room', label: 'ห้องพัก', iconSvg: OutlineRoomIcon, formType: 'BNB' },
+  // /residential booking-type picker was removed per UX — jump straight to
+  // the OTA picker with sensible defaults (whole_unit + POOL_VILLA).
+  { key: 'house', label: 'บ้าน', iconSvg: OutlineHouseIcon, formType: 'POOL_VILLA', nextHref: '/manage/listings/new/residential/listings?booking=whole_unit&type=POOL_VILLA' },
+  { key: 'hotel', label: 'โรงแรม', iconSvg: OutlineHotelIcon, formType: 'BNB', comingSoon: true },
+  { key: 'camp', label: 'แคมป์', iconSvg: OutlineCampIcon, formType: 'LOFT', comingSoon: true },
+  { key: 'room', label: 'ห้องพัก', iconSvg: OutlineRoomIcon, formType: 'BNB', comingSoon: true },
 ]
 
 /**
@@ -151,6 +157,17 @@ const propertyTypes: PropertyType[] = [
  * remaining basic info.
  */
 export default function NewListingTypePage() {
+  // When this page is reached via "เพิ่มที่พัก" (?fresh=1), wipe every
+  // wizard sessionStorage draft so the new property starts from a truly
+  // blank slate. Read the param via window.location instead of Next's
+  // useSearchParams to avoid the Next 15+ Suspense requirement that blanks
+  // the page when a hook suspends during render.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('fresh') === '1') clearWizardDrafts()
+  }, [])
+
   return (
     <div className="mx-auto max-w-5xl">
       <Link
@@ -174,6 +191,30 @@ export default function NewListingTypePage() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {propertyTypes.map((t) => {
+          // Disabled tile — render as a grey, non-clickable div with a
+          // "เร็วๆ นี้" badge so the owner knows it's coming but not usable.
+          if (t.comingSoon) {
+            return (
+              <div
+                key={t.key}
+                aria-disabled
+                title="เร็วๆ นี้ — ยังไม่เปิดให้ใช้งาน"
+                className="relative flex aspect-square cursor-not-allowed flex-col items-center justify-center gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-center opacity-60"
+              >
+                <span className="absolute right-2 top-2 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                  เร็วๆ นี้
+                </span>
+                {t.iconSvg ? (
+                  <t.iconSvg className="size-20 text-gray-400" />
+                ) : (
+                  <Icon name={t.icon!} className="size-20 text-gray-400" />
+                )}
+                <span className="line-clamp-2 text-lg font-semibold leading-tight text-gray-400">
+                  {t.label}
+                </span>
+              </div>
+            )
+          }
           // Category tile → name step (carries the chosen type via ?type=)
           const href = t.nextHref ?? `/manage/listings/new/name?type=${t.formType}`
           return (

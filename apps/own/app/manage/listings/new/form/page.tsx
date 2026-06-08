@@ -102,8 +102,13 @@ function CounterRow({
 }
 
 /** sessionStorage key — persists the new-listing form draft across refresh / back-navigation
- *  so the owner doesn't lose what they typed. Cleared on successful create. */
+ *  so the owner doesn't lose what they typed. Cleared only by a fresh "เพิ่มที่พัก"
+ *  (?fresh=1) or "ออกโดยไม่บันทึก", NOT on create — so navigating back to step 3
+ *  re-hydrates the values. */
 const FORM_DRAFT_KEY = 'pms.newListing.formDraft'
+/** sessionStorage key — remembers the property id created at step 3 so coming
+ *  back here UPDATES the same property instead of creating a duplicate. */
+const CREATED_ID_KEY = 'pms.newListing.createdId'
 
 export default function NewListingPage() {
   const router = useRouter()
@@ -145,6 +150,10 @@ export default function NewListingPage() {
   /** Has the saved draft been hydrated yet? Auto-save is gated on this to avoid
    *  overwriting saved data with the initial blank state on first render. */
   const [hydrated, setHydrated] = useState(false)
+  /** Property id already created in this wizard session (null = not yet). When
+   *  set, re-submitting step 3 UPDATES the property instead of creating a new
+   *  one — so going back + forward doesn't spawn duplicates. */
+  const [createdId, setCreatedId] = useState<string | null>(null)
 
   // If preset doesn't exist (or none passed) → auto-select first type when list loads
   useEffect(() => {
@@ -160,6 +169,10 @@ export default function NewListingPage() {
   //  2) Scraped data (only fills in blanks the draft didn't have)
   useEffect(() => {
     if (typeof window === 'undefined') return
+
+    // 0. Remember a property already created in this wizard session.
+    const savedId = sessionStorage.getItem(CREATED_ID_KEY)
+    if (savedId) setCreatedId(savedId)
 
     // 1. Load saved draft
     const draftRaw = sessionStorage.getItem(FORM_DRAFT_KEY)
@@ -255,11 +268,18 @@ export default function NewListingPage() {
   }, [form, splitEnabled, splitVariants, splitDraft, editingIdx])
 
   const createVariant = trpc.variant.create.useMutation()
+  const updateProperty = trpc.property.update.useMutation()
+  const updateVariant = trpc.variant.update.useMutation()
+  const utils = trpc.useUtils()
 
   const create = trpc.property.create.useMutation({
     onSuccess: async (created) => {
-      // Draft no longer needed — property is in the DB now
-      if (typeof window !== 'undefined') sessionStorage.removeItem(FORM_DRAFT_KEY)
+      // Keep the form draft (so back-nav to step 3 re-hydrates) and remember
+      // the created id so a re-submit updates instead of duplicating.
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(CREATED_ID_KEY, created.id)
+      }
+      setCreatedId(created.id)
       // Create any split variants in sequence so sort_order is deterministic
       try {
         for (const v of splitVariants) {
@@ -298,14 +318,50 @@ export default function NewListingPage() {
     if (form.totalBedrooms < 1) return setError('กรุณาระบุจำนวนห้องนอน')
     if (form.totalBathrooms < 1) return setError('กรุณาระบุจำนวนห้องน้ำ')
     if (form.defaultVariantMaxGuests < 1) return setError('กรุณาระบุจำนวนผู้เข้าพัก')
+
+    const name = {
+      ...(form.nameTh.trim() && { th: form.nameTh.trim() }),
+      ...(form.nameEn.trim() && { en: form.nameEn.trim() }),
+    }
+
+    // Already created in this session → UPDATE the same property instead of
+    // creating a duplicate, then move forward to step 4.
+    if (createdId) {
+      setSubmitting(true)
+      try {
+        await updateProperty.mutateAsync({
+          id: createdId,
+          name,
+          type: form.type,
+          totalBedrooms: form.totalBedrooms,
+          totalBathrooms: form.totalBathrooms,
+          partnerListing: form.partnerListing,
+          agentPriceUnit: form.agentPriceUnit,
+        })
+        // Keep the default variant's maxGuests in sync.
+        const prop = await utils.property.byId.fetch({ id: createdId })
+        const def = prop?.variants.find((v) => v.isDefault)
+        if (def && def.maxGuests !== form.defaultVariantMaxGuests) {
+          await updateVariant.mutateAsync({
+            id: def.id,
+            maxGuests: form.defaultVariantMaxGuests,
+          })
+        }
+        utils.property.byId.invalidate({ id: createdId })
+        router.push(`/manage/listings/${createdId}/policies`)
+        router.refresh()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'บันทึกไม่สำเร็จ')
+        setSubmitting(false)
+      }
+      return
+    }
+
     setSubmitting(true)
     create.mutate({
       // Only include language fields the user actually filled in — the Zod
       // schema's refinement requires at least one, validated by the form above.
-      name: {
-        ...(form.nameTh.trim() && { th: form.nameTh.trim() }),
-        ...(form.nameEn.trim() && { en: form.nameEn.trim() }),
-      },
+      name,
       type: form.type,
       totalBedrooms: form.totalBedrooms,
       totalBathrooms: form.totalBathrooms,

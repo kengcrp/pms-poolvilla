@@ -115,7 +115,9 @@ export default function ResidentialListingsPage() {
     router.push(`/manage/listings/new/name?${params.toString()}`)
   }
 
-  const backHref = `/manage/listings/new/residential?booking=${booking}`
+  // /residential booking-type picker was removed — back goes straight to /new.
+  const backHref = `/manage/listings/new`
+  void booking // silence unused-var warning; kept on URL for downstream pages
   const canContinue = selected.size > 0
 
   return (

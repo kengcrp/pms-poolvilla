@@ -184,7 +184,7 @@ export default function ListingDetailsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl pb-24">
+    <div className="mx-auto max-w-3xl pb-24">
       <Link
         href={`/manage/listings/${id}/policies`}
         className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 transition-colors hover:text-brand-700"
@@ -194,7 +194,7 @@ export default function ListingDetailsPage() {
       </Link>
 
       <h1 className="mb-5 text-2xl font-bold tracking-tight text-gray-900">
-        สถานที่ใกล้เคียง
+        ข้อมูลที่พัก
       </h1>
 
       <WizardStepper propertyId={id} current={5} />
@@ -231,20 +231,17 @@ export default function ListingDetailsPage() {
         <MultiLangList items={shops} onChange={setShops} />
       </DetailsCard>
 
-      {/* Card: extra details (multi-lang, optional) */}
-      <DetailsCard
-        title="ข้อมูลที่พัก"
-        desc="ข้อมูลเสริมอื่น ๆ — เคล็ดลับสำหรับแขก, สิ่งที่แขกควรรู้"
-        optional
-      >
-        <MultiLangList items={extraDetails} onChange={setExtraDetails} />
-      </DetailsCard>
+      {/* "ข้อมูลที่พัก" card removed per UX request. The `extraDetails` state
+          is still kept in the page so the autosave / submit payload stays
+          shaped the same — just no UI to edit it any more. */}
 
       {/* Sticky footer — wrapper matches ManageShell main's padding so inner
           max-w-5xl aligns with the page cards above. */}
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-gray-200 bg-white/95 backdrop-blur">
         <div className="px-4 py-3 sm:px-6 lg:px-8">
-          <div className="mx-auto flex max-w-5xl items-center justify-between">
+          {/* ย้อนกลับ pinned to the LEFT edge of the form area (matches the
+              card left edge — "พอดีเส้นสีแดง" per UX). ถัดไป stays right. */}
+          <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
             <Link href={`/manage/listings/${id}/policies`}>
               <Button variant="secondary" type="button">
                 <Icon name="chevronLeft" className="size-3.5" />

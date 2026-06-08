@@ -245,13 +245,9 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
                 }
               />
 
-              <SelectableCard
-                active={selected === 'rules'}
-                onClick={() => setSelected('rules')}
-                label="การตั้งค่าการจอง"
-                value="เกสต์ต้องอ่านและตกลงตามที่คุณอนุญาต"
-                multiline
-              />
+              {/* Removed per UX request: การตั้งค่าการจอง, ความปลอดภัยของผู้เข้าพัก,
+                  ลิงก์ที่กำหนดเอง — handlers / panes still exist so any state
+                  remains intact if the tiles are re-enabled later. */}
 
               <SelectableCard
                 active={selected === 'house-rules'}
@@ -266,13 +262,6 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
               />
 
               <SelectableCard
-                active={selected === 'safety'}
-                onClick={() => setSelected('safety')}
-                label="ความปลอดภัยของผู้เข้าพัก"
-                value={`${property.amenities.filter((a) => ['smoke_alarm', 'co_alarm', 'fire_ext', 'first_aid', 'security_camera', 'lock'].includes(a.amenity.code)).length} รายการ`}
-              />
-
-              <SelectableCard
                 active={selected === 'cancellation'}
                 onClick={() => setSelected('cancellation')}
                 label="นโยบายยกเลิกการจอง"
@@ -281,13 +270,6 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
                   'ยังไม่ได้กรอก'
                 }
                 multiline
-              />
-
-              <SelectableCard
-                active={selected === 'custom-links'}
-                onClick={() => setSelected('custom-links')}
-                label="ลิงก์ที่กำหนดเอง"
-                value="เพิ่มรายละเอียด"
               />
 
               <SelectableCard
@@ -301,7 +283,7 @@ export default function EditListingPage({ params }: { params: Promise<{ id: stri
               <SelectableCard
                 active={selected === 'area'}
                 onClick={() => setSelected('area')}
-                label="สถานที่"
+                label="ข้อมูลที่ตั้ง"
                 value={
                   property.location ? property.location.address.slice(0, 60) : 'ยังไม่ได้กรอก'
                 }
@@ -749,7 +731,7 @@ function EditorPane({
   onPhotoCategoryChange,
 }: EditorPaneProps) {
   return (
-    <div className="min-h-[480px] rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="min-h-[480px] bg-white p-5">
       {selected === 'photos' && (
         <PhotoGalleryPreview
           propertyId={propertyId}
@@ -775,7 +757,7 @@ function EditorPane({
         </EditorWrapper>
       )}
       {selected === 'area' && (
-        <EditorWrapper title="สถานที่">
+        <EditorWrapper title="ข้อมูลที่ตั้ง">
           <LocationSection propertyId={propertyId} />
         </EditorWrapper>
       )}

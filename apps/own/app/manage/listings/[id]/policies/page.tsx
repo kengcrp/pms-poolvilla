@@ -144,22 +144,13 @@ export default function ListingPoliciesPage() {
                 ย้อนกลับ
               </Button>
             </Link>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                type="button"
-                onClick={() => persistAndGoto(`/manage/listings/${id}/details`)}
-              >
-                ข้าม
-              </Button>
-              <Button
-                type="button"
-                onClick={() => persistAndGoto(`/manage/listings/${id}/details`)}
-              >
-                ดำเนินการต่อ
-                <Icon name="chevronRight" className="size-3.5" />
-              </Button>
-            </div>
+            <Button
+              type="button"
+              onClick={() => persistAndGoto(`/manage/listings/${id}/details`)}
+            >
+              ดำเนินการต่อ
+              <Icon name="chevronRight" className="size-3.5" />
+            </Button>
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { Button, Icon, Input, type IconName, cn } from '@pms/ui'
@@ -46,6 +47,14 @@ const sections: Section[] = [
       { code: 'iron_board', label: 'เตารีด', icon: 'shirt' },
       { code: 'welcome_drink', label: 'Welcome Drink', icon: 'coffee' },
       { code: 'welcome_snack', label: 'Welcome Snack', icon: 'glassWater' },
+      // Newly added per spec — accessibility / facility / charging amenities.
+      // Icons are best-effort with the existing UI registry (no proper lift /
+      // wheelchair glyphs yet — using close substitutes).
+      { code: 'lift', label: 'ลิฟท์', icon: 'building' },
+      { code: 'meeting_room', label: 'Meeting Room', icon: 'chalkboard' },
+      { code: 'wheelchair_ramp', label: 'ทางลาดวีลแชร์', icon: 'users' },
+      { code: 'ev_charger', label: 'ที่ชาร์จ EV', icon: 'bolt' },
+      { code: 'jacuzzi', label: 'อ่างจากุซซี่', icon: 'hotTub' },
     ],
   },
   {
@@ -223,14 +232,14 @@ const POOL_FEATURES: { code: string; label: string; emoji: string }[] = [
   { code: 'kid_pool', label: 'สระว่ายน้ำเด็ก', emoji: '👶' },
   { code: 'slider', label: 'สไลเดอร์', emoji: '🛝' },
   { code: 'sea_view', label: 'วิวทะเล', emoji: '🌊' },
+  { code: 'sea_view_lookout', label: 'มวยทะเล', emoji: '🌊' },
   { code: 'bbq_area', label: 'ที่ปิ้งย่าง', emoji: '🍖' },
   { code: 'jacuzzi', label: 'จากุซซี่', emoji: '♨️' },
-  { code: 'water_curtain', label: 'ม่านน้ำ', emoji: '💦' },
 ]
 
 /** Pool shape / style descriptors — multi-select describing what the pool looks like. */
 const POOL_SHAPES: { code: string; label: string }[] = [
-  { code: 'sloped', label: 'พื้นลาดเอียง (ตื้น → ลึก)' },
+  { code: 'sloped', label: 'พื้นสโลบ (ตื้น → ลึก)' },
   { code: 'freeform', label: 'สระทรง Freeform' },
   { code: 'l_shape', label: 'สระทรงตัว L' },
   { code: 'jacuzzi_system', label: 'มีระบบจากุซซี่' },
@@ -245,6 +254,12 @@ interface PoolConfig {
   lengthM: string
   depthM: string
   features: string[]
+  /** Optional per-feature details — only a few features render extra inputs.
+   *  - kid_pool: dimensions of the kids' pool (width / length / depth in m)
+   *  - slider:   slide length (m) + weight limit (kg)
+   *  All fields are strings so empty input doesn't coerce to 0. */
+  kidPool?: { widthM: string; lengthM: string; depthM: string }
+  slider?: { lengthM: string; maxLoadKg: string }
 }
 
 function blankPool(): PoolConfig {
@@ -256,6 +271,8 @@ function blankPool(): PoolConfig {
     lengthM: '',
     depthM: '',
     features: [],
+    kidPool: { widthM: '', lengthM: '', depthM: '' },
+    slider: { lengthM: '', maxLoadKg: '' },
   }
 }
 
@@ -653,13 +670,8 @@ export default function ListingAmenitiesPage() {
 
   return (
     <div className="mx-auto max-w-4xl pb-24">
-      <Link
-        href={`/manage/listings/${id}/details`}
-        className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 transition-colors hover:text-brand-700"
-      >
-        <Icon name="chevronLeft" className="size-3.5" />
-        ย้อนกลับ
-      </Link>
+      {/* Top "ย้อนกลับ" breadcrumb removed per UX request — the sticky footer
+          back button is the canonical back action. */}
 
       <h1 className="mb-5 text-2xl font-bold tracking-tight text-gray-900">
         แจ้งลูกค้าทราบสิ่งที่ที่พักท่านมี
@@ -711,22 +723,21 @@ export default function ListingAmenitiesPage() {
           so inner max-w-4xl aligns with the page cards above. */}
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-gray-200 bg-white/95 backdrop-blur">
         <div className="px-4 py-3 sm:px-6 lg:px-8">
-          <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
-            <Button
-              variant="secondary"
-              type="button"
-              onClick={() => persistAndGoto(`/manage/listings/${id}/photos`)}
-            >
-              ข้าม
-            </Button>
-            <div className="text-sm text-gray-500">
-              เลือกแล้ว {selected.size} รายการ
-            </div>
+          {/* ย้อนกลับ + ดำเนินการต่อ — both buttons present per UX request
+              (every wizard step 1-10 should expose both controls). */}
+          <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+            <Link href={`/manage/listings/${id}/details`}>
+              <Button variant="secondary" type="button">
+                <Icon name="chevronLeft" className="size-3.5" />
+                ย้อนกลับ
+              </Button>
+            </Link>
             <Button
               type="button"
               onClick={() => persistAndGoto(`/manage/listings/${id}/photos`)}
             >
               ดำเนินการต่อ
+              <Icon name="chevronRight" className="size-3.5" />
             </Button>
           </div>
         </div>
@@ -1020,8 +1031,10 @@ function PoolModal({
                   </div>
                 </PoolSection>
 
-                {/* Features — emoji + toggle pills */}
-                <PoolSection icon="spa" title="ฟังก์ชันรอบสระ">
+                {/* Features — emoji + toggle pills. Two features (kid_pool +
+                    slider) render a small inline detail form when selected so
+                    the owner can capture dimensions / weight limit. */}
+                <PoolSection icon="spa" title="ฟังก์ชั่นสระ">
                   <div className="flex flex-wrap gap-2">
                     {POOL_FEATURES.map((f) => {
                       const active = p.features.includes(f.code)
@@ -1045,6 +1058,91 @@ function PoolModal({
                       )
                     })}
                   </div>
+
+                  {/* kid_pool dimensions sub-form */}
+                  {p.features.includes('kid_pool') && (
+                    <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50/40 p-3">
+                      <div className="mb-2 text-xs font-semibold text-brand-800">
+                        👶 ขนาดสระว่ายน้ำเด็ก
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(
+                          [
+                            { key: 'widthM', label: 'กว้าง (ม.)' },
+                            { key: 'lengthM', label: 'ยาว (ม.)' },
+                            { key: 'depthM', label: 'ลึก (ม.)' },
+                          ] as const
+                        ).map(({ key, label }) => (
+                          <div key={key}>
+                            <div className="mb-1 text-[10.5px] text-gray-500">{label}</div>
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.1"
+                              value={p.kidPool?.[key] ?? ''}
+                              onChange={(e) =>
+                                updatePool(idx, {
+                                  kidPool: {
+                                    widthM: p.kidPool?.widthM ?? '',
+                                    lengthM: p.kidPool?.lengthM ?? '',
+                                    depthM: p.kidPool?.depthM ?? '',
+                                    [key]: e.target.value,
+                                  },
+                                })
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* slider details sub-form */}
+                  {p.features.includes('slider') && (
+                    <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50/40 p-3">
+                      <div className="mb-2 text-xs font-semibold text-brand-800">
+                        🛝 รายละเอียดสไลเดอร์
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <div className="mb-1 text-[10.5px] text-gray-500">ความยาว (ม.)</div>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.1"
+                            value={p.slider?.lengthM ?? ''}
+                            onChange={(e) =>
+                              updatePool(idx, {
+                                slider: {
+                                  lengthM: e.target.value,
+                                  maxLoadKg: p.slider?.maxLoadKg ?? '',
+                                },
+                              })
+                            }
+                          />
+                        </div>
+                        <div>
+                          <div className="mb-1 text-[10.5px] text-gray-500">
+                            จำกัดน้ำหนัก (กก.)
+                          </div>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="1"
+                            value={p.slider?.maxLoadKg ?? ''}
+                            onChange={(e) =>
+                              updatePool(idx, {
+                                slider: {
+                                  lengthM: p.slider?.lengthM ?? '',
+                                  maxLoadKg: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </PoolSection>
               </div>
             </div>
@@ -1300,16 +1398,11 @@ function ParkingModal({ parking, updateParking, onSave, onCancel }: ParkingModal
       aria-labelledby="parking-modal-title"
     >
       <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-        {/* Header */}
+        {/* Header — icon removed per UX request */}
         <div className="flex items-center justify-between gap-4 px-6 pb-3 pt-5">
-          <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-full bg-brand-50 text-brand-700">
-              <Icon name="parking" className="size-4" />
-            </div>
-            <h2 id="parking-modal-title" className="text-lg font-bold text-gray-900">
-              รายละเอียดที่จอดรถ
-            </h2>
-          </div>
+          <h2 id="parking-modal-title" className="text-lg font-bold text-gray-900">
+            รายละเอียดที่จอดรถ
+          </h2>
           <button
             type="button"
             onClick={onCancel}
@@ -1703,9 +1796,13 @@ function KaraokeWarningModal({
   onAcknowledge: () => void
   onSwitchToSmartTv: () => void
 }) {
-  return (
+  // Portal to document.body so `position: fixed` is relative to the viewport
+  // even when an ancestor has `transform`/`filter` (which would otherwise turn
+  // it into a positioning context and trap the modal at the top of the page).
+  if (typeof window === 'undefined') return null
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-[9999] flex min-h-screen items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="karaoke-warning-title"
@@ -1758,6 +1855,7 @@ function KaraokeWarningModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Icon, cn } from '@pms/ui'
+import { WizardExitGuard } from './WizardExitGuard'
 
 /**
  * 10-step progress indicator for the new-listing onboarding wizard.
@@ -36,14 +37,14 @@ export interface WizardStep {
   href: (propertyId?: string) => string | null
 }
 
-// "เสริมคนเข้าพัก" #4, "สถานที่ใกล้เคียง" #5 — guest-pricing decisions come
+// "เสริมคนเข้าพัก" #4, "ข้อมูลที่พัก" #5 — guest-pricing decisions come
 // before location detail so amenity/photo steps inherit full context.
 export const WIZARD_STEPS: WizardStep[] = [
   { num: 1,  label: 'ประเภทบ้าน',       slug: 'new',         href: () => '/manage/listings/new' },
   { num: 2,  label: 'ชื่อที่พัก',        slug: 'name',        href: () => '/manage/listings/new/name' },
   { num: 3,  label: 'ข้อมูลพื้นฐาน',    slug: 'form',        href: () => '/manage/listings/new/form' },
   { num: 4,  label: 'เสริมคนเข้าพัก',   slug: 'policies',    href: (id) => (id ? `/manage/listings/${id}/policies` : null) },
-  { num: 5,  label: 'สถานที่ใกล้เคียง',  slug: 'details',     href: (id) => (id ? `/manage/listings/${id}/details` : null) },
+  { num: 5,  label: 'ข้อมูลที่พัก',      slug: 'details',     href: (id) => (id ? `/manage/listings/${id}/details` : null) },
   { num: 6,  label: 'สิ่งอำนวยฯ',       slug: 'amenities',   href: (id) => (id ? `/manage/listings/${id}/amenities` : null) },
   { num: 7,  label: 'รูปภาพ',           slug: 'photos',      href: (id) => (id ? `/manage/listings/${id}/photos` : null) },
   { num: 8,  label: 'พื้นที่',           slug: 'area',        href: (id) => (id ? `/manage/listings/${id}/area` : null) },
@@ -66,7 +67,31 @@ export function WizardStepper({ propertyId, current, className }: Props) {
   const currentStep = WIZARD_STEPS.find((s) => s.num === current)
   const pct = Math.round(((current - 1) / (TOTAL_STEPS - 1)) * 100)
   return (
-    <div className={cn('mb-6 rounded-2xl border border-gray-200 bg-white p-4', className)}>
+    <>
+      {/* Exit guard piggy-backs on every wizard page that has actual form
+          data to lose. Step 1 (ประเภทบ้าน) is just a tile picker — nothing
+          to save yet — so the prompt would be annoying there. */}
+      {current > 1 && <WizardExitGuard propertyId={propertyId} />}
+
+      {/* "บันทึกและออก" — top-right escape hatch (steps 2-10). Plain Link;
+          sessionStorage drafts already persist on every page change so no
+          explicit save call is needed here. `data-wizard-nav` marker tells
+          the exit guard to skip the warning popup for this button. */}
+      {current > 1 && (
+        <div className="mb-3 flex justify-end">
+          <Link
+            href="/manage/listings"
+            data-wizard-nav="true"
+            className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition-all hover:border-gray-300 hover:bg-gray-50 hover:shadow"
+            title="บันทึกร่างและกลับไปลิสติ้งที่พัก"
+          >
+            <Icon name="check" className="size-3.5 text-brand-600" />
+            บันทึกและออก
+          </Link>
+        </div>
+      )}
+
+      <div className={cn('mb-6 rounded-2xl border border-gray-200 bg-white p-4', className)}>
       {/* Top row: prominent "ขั้นที่ X / N — label" + percent */}
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <div className="flex items-baseline gap-2 min-w-0">
@@ -137,6 +162,10 @@ export function WizardStepper({ propertyId, current, className }: Props) {
                   href={href}
                   className="block transition-opacity hover:opacity-70"
                   title={`ย้อนกลับไป: ${step.label}`}
+                  // Marker — WizardExitGuard treats links carrying this
+                  // attribute as "internal wizard navigation" and skips the
+                  // "ออกโดยไม่บันทึก" prompt for them.
+                  data-wizard-nav="true"
                 >
                   {circle}
                 </Link>
@@ -148,5 +177,6 @@ export function WizardStepper({ propertyId, current, className }: Props) {
         })}
       </div>
     </div>
+    </>
   )
 }

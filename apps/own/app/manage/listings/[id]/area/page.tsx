@@ -194,25 +194,17 @@ export default function ListingAreaPage() {
         </div>
       </div>
 
-      {/* Sticky footer — padding wrapper matches ManageShell main so inner max-w-3xl
-          aligns with the page cards above. */}
+      {/* Sticky footer — both buttons grouped on the right per UX request.
+          ย้อนกลับ sits just left of ดำเนินการต่อ; no left-edge stranding. */}
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-gray-200 bg-white/95 backdrop-blur">
         <div className="px-4 py-3 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
-          <Link href={`/manage/listings/${id}/photos`}>
-            <Button variant="secondary" type="button">
-              <Icon name="chevronLeft" className="size-3.5" />
-              ย้อนกลับ
-            </Button>
-          </Link>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              type="button"
-              onClick={() => router.push(`/manage/listings/${id}/ical`)}
-            >
-              ข้าม
-            </Button>
+          <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+            <Link href={`/manage/listings/${id}/photos`}>
+              <Button variant="secondary" type="button">
+                <Icon name="chevronLeft" className="size-3.5" />
+                ย้อนกลับ
+              </Button>
+            </Link>
             <Button
               type="button"
               onClick={() => router.push(`/manage/listings/${id}/ical`)}
@@ -221,7 +213,6 @@ export default function ListingAreaPage() {
               <Icon name="chevronRight" className="size-3.5" />
             </Button>
           </div>
-        </div>
         </div>
       </div>
     </div>

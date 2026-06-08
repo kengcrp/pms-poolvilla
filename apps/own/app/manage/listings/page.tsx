@@ -26,7 +26,7 @@ export default function ListingsPage() {
             {isPending ? 'กำลังโหลด...' : `ที่พักทั้งหมด ${properties.length} รายการ`}
           </p>
         </div>
-        <Link href="/manage/listings/new">
+        <Link href="/manage/listings/new?fresh=1">
           <Button>
             <Icon name="plus" className="size-3.5" />
             เพิ่มที่พัก
@@ -50,7 +50,7 @@ export default function ListingsPage() {
           </div>
           <h3 className="text-base font-semibold text-gray-900">ยังไม่มีที่พัก</h3>
           <p className="mt-1 text-sm text-gray-500">เริ่มต้นเพิ่มที่พักหลังแรกของคุณ</p>
-          <Link href="/manage/listings/new" className="mt-5">
+          <Link href="/manage/listings/new?fresh=1" className="mt-5">
             <Button>
               <Icon name="plus" className="size-3.5" /> เพิ่มที่พักหลังแรก
             </Button>

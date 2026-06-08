@@ -27,6 +27,27 @@ interface MenuGroup {
   items: MenuItem[]
 }
 
+/**
+ * Feature-lock list — sidebar items whose pages exist + work but are presented
+ * as "ยังไม่เปิดให้ใช้งาน" (greyed, non-clickable, lock badge). All data, routes
+ * and code stay intact; this is purely a presentational gate.
+ *
+ * 🔓 TO UNLOCK EVERYTHING: empty this set → `new Set<string>()`.
+ *    (or remove individual hrefs to unlock them one at a time.)
+ */
+const LOCKED_HREFS = new Set<string>([
+  '/manage/listings', // ลิสติ้งที่พัก
+  '/manage/housekeeper', // House Keeper
+  '/manage/accounting', // ด้านบัญชี
+  '/manage/dashboard', // แดชบอร์ด
+  '/manage/sale-page/bookings', // ตรวจสอบการจอง
+  '/manage/coupons', // คูปอง
+  '/manage/sale-page/videos', // อัพโหลดวิดีโอที่พัก
+  '/manage/settings', // ตั้งค่าทั่วไป
+  '/manage/manual', // คู่มือการใช้งาน
+  '/manage/premium', // แพ็กเกจ Premium
+])
+
 const menu: MenuGroup[] = [
   {
     groupKey: 'menu.group.manage',
@@ -145,7 +166,7 @@ export function Sidebar({ mobileOpen, onClose, signOutAction }: SidebarProps) {
       >
         <div className="flex h-16 items-center justify-between gap-2 border-b border-gray-200 px-5">
           <Link
-            href="/manage/dashboard"
+            href="/manage/calendar"
             onClick={onClose}
             className="flex items-center gap-2.5"
           >
@@ -174,6 +195,32 @@ export function Sidebar({ mobileOpen, onClose, signOutAction }: SidebarProps) {
                 {group.items.map((item) => {
                   const active = pathname.startsWith(item.href)
                   const badge = badgeFor(item.badgeKey)
+                  const locked = LOCKED_HREFS.has(item.href)
+
+                  // Locked item — render a non-clickable greyed row with a small
+                  // "เร็วๆ นี้" lock pill. Page + route still exist; this only
+                  // gates the entry point. Unlock by editing LOCKED_HREFS.
+                  if (locked) {
+                    return (
+                      <li key={item.href}>
+                        <div
+                          aria-disabled
+                          title="ยังไม่เปิดให้ใช้งาน"
+                          className="relative flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-300"
+                        >
+                          <span className="relative shrink-0">
+                            <Icon name={item.icon} fixedWidth className="size-5 text-gray-300" />
+                          </span>
+                          <span className="flex-1">{t(item.labelKey)}</span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold text-gray-400">
+                            <Icon name="lock" className="size-2.5" />
+                            เร็วๆ นี้
+                          </span>
+                        </div>
+                      </li>
+                    )
+                  }
+
                   return (
                     <li key={item.href}>
                       <Link
@@ -252,20 +299,10 @@ export function Sidebar({ mobileOpen, onClose, signOutAction }: SidebarProps) {
           ))}
         </nav>
 
-        {/* Logout button — pinned to the bottom of the sidebar. Rendered as a
-            server-action form so the existing NextAuth signOut flow runs.
-            Hidden when no action is passed (defensive). */}
-        {signOutAction && (
-          <form action={signOutAction} className="shrink-0 border-t border-gray-200 p-3">
-            <button
-              type="submit"
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50"
-            >
-              <Icon name="logout" className="size-4 shrink-0" />
-              <span className="flex-1 text-left">{t('shell.signOut')}</span>
-            </button>
-          </form>
-        )}
+        {/* Logout button removed per UX request — the `signOutAction` prop is
+            still accepted on the Sidebar API in case a future surface wants to
+            re-enable a logout button without changing the component contract. */}
+        {void signOutAction}
       </aside>
     </>
   )

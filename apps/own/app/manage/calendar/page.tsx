@@ -93,7 +93,7 @@ export default function CalendarPage() {
             <Icon name="calendar" />
           </div>
           <p className="text-sm text-gray-600">ยังไม่มีที่พัก</p>
-          <Link href="/manage/listings/new" className="mt-4">
+          <Link href="/manage/listings/new?fresh=1" className="mt-4">
             <Button>
               <Icon name="plus" className="size-3.5" /> เพิ่มที่พัก
             </Button>

@@ -38,7 +38,8 @@ export default function ListingIcalPage() {
 
       <IcalSyncSection propertyId={id} />
 
-      {/* Sticky footer — back / skip / continue */}
+      {/* Sticky footer — standardized to match every other wizard step
+          (max-w-3xl centered, justify-between, gap-3). */}
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-gray-200 bg-white/95 backdrop-blur">
         <div className="px-4 py-3 sm:px-6 lg:px-8">
           <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
@@ -48,22 +49,13 @@ export default function ListingIcalPage() {
                 ย้อนกลับ
               </Button>
             </Link>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                type="button"
-                onClick={() => router.push(`/manage/listings/${id}/rules`)}
-              >
-                ข้าม
-              </Button>
-              <Button
-                type="button"
-                onClick={() => router.push(`/manage/listings/${id}/rules`)}
-              >
-                ดำเนินการต่อ
-                <Icon name="chevronRight" className="size-3.5" />
-              </Button>
-            </div>
+            <Button
+              type="button"
+              onClick={() => router.push(`/manage/listings/${id}/rules`)}
+            >
+              ดำเนินการต่อ
+              <Icon name="chevronRight" className="size-3.5" />
+            </Button>
           </div>
         </div>
       </div>

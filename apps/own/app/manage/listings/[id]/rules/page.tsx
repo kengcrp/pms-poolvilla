@@ -49,22 +49,13 @@ export default function ListingRulesPage() {
                 ย้อนกลับ
               </Button>
             </Link>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                type="button"
-                onClick={() => router.push(`/manage/listings/${id}/edit`)}
-              >
-                ข้าม
-              </Button>
-              <Button
-                type="button"
-                onClick={() => router.push(`/manage/listings/${id}/edit`)}
-              >
-                ไปแก้ไขแบบละเอียด
-                <Icon name="chevronRight" className="size-3.5" />
-              </Button>
-            </div>
+            <Button
+              type="button"
+              onClick={() => router.push(`/manage/listings/${id}/edit`)}
+            >
+              ไปแก้ไขแบบละเอียด
+              <Icon name="chevronRight" className="size-3.5" />
+            </Button>
           </div>
         </div>
       </div>

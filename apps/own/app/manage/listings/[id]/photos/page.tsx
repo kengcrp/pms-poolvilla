@@ -431,16 +431,16 @@ export default function ListingPhotosPage() {
           max-w-4xl aligns with the page cards above. */}
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-gray-200 bg-white/95 backdrop-blur">
         <div className="px-4 py-3 sm:px-6 lg:px-8">
-          <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
-            <Button
-              variant="secondary"
-              type="button"
-              onClick={() => persistAndGoto(`/manage/listings/${id}/area`)}
-              disabled={uploading}
-            >
-              ข้าม
-            </Button>
-            <div className="text-sm text-gray-500">
+          {/* ย้อนกลับ + ดำเนินการต่อ — both buttons present per UX request.
+              Photo count text moved to a small gray line between them. */}
+          <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+            <Link href={`/manage/listings/${id}/amenities`}>
+              <Button variant="secondary" type="button" disabled={uploading}>
+                <Icon name="chevronLeft" className="size-3.5" />
+                ย้อนกลับ
+              </Button>
+            </Link>
+            <div className="hidden text-sm text-gray-500 sm:block">
               รูปหลัก {photos.length} / {MAX_PHOTOS}
               {extraPhotos.length > 0 && (
                 <span className="ml-2 text-gray-400">· รูปเพิ่ม {extraPhotos.length}</span>
@@ -452,6 +452,7 @@ export default function ListingPhotosPage() {
               disabled={uploading}
             >
               {uploading ? 'กำลังอัพโหลด...' : 'ดำเนินการต่อ'}
+              <Icon name="chevronRight" className="size-3.5" />
             </Button>
           </div>
         </div>
